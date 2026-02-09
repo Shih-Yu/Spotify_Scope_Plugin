@@ -111,13 +111,23 @@ class SpotifyConfig(BasePipelineConfig):
         ),
     )
 
+    headless_mode: bool = Field(
+        default=True,
+        description="Enable for servers (RunPod, etc.) - uses manual auth flow instead of browser popup",
+        json_schema_extra=ui_field_config(
+            order=53, 
+            label="Headless/Server Mode",
+            is_load_param=True,
+        ),
+    )
+
     # --- Genius/Lyrics Authentication (Load-time params) ---
 
     genius_token: str = Field(
         default="",
         description="Genius API access token for fetching lyrics (get one at genius.com/api-clients)",
         json_schema_extra=ui_field_config(
-            order=53, 
+            order=54, 
             label="Genius API Token",
             is_load_param=True,
         ),

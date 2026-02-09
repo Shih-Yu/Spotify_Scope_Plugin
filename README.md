@@ -96,6 +96,7 @@ After installing, select **Spotify Prompt Generator** from the pipeline dropdown
 | Spotify Client ID | Your Spotify API Client ID (only for Spotify mode) |
 | Spotify Client Secret | Your Spotify API Client Secret (only for Spotify mode) |
 | Redirect URI | OAuth callback URL (default: `http://localhost:8888/callback`) |
+| Headless/Server Mode | Enable for RunPod/servers - uses manual auth flow |
 
 ### Template Variables
 
@@ -134,6 +135,44 @@ To enable lyrics-based prompts:
 2. Enter the token in **Genius API Token** setting
 3. Set **Prompt Mode** to `lyrics`
 4. Lyrics will be fetched and used for visual prompts!
+
+## RunPod / Server Deployment
+
+This plugin is designed to work on headless servers like RunPod.
+
+### Manual Mode on RunPod (Recommended Start)
+
+Manual mode works immediately on RunPod with no additional setup:
+1. Install the plugin
+2. Use `manual` input source
+3. Optionally add Genius API token for lyrics
+
+### Spotify Mode on RunPod (When API Available)
+
+Since RunPod doesn't have a browser, use the authentication helper script:
+
+```bash
+# SSH into your RunPod instance
+cd /path/to/scope-spotify
+
+# Run the auth helper
+python scripts/spotify_auth.py
+```
+
+The script will:
+1. Ask for your Spotify credentials
+2. Give you a URL to visit in your local browser
+3. You authorize the app and copy the redirect URL back
+4. Token is cached for the plugin to use
+
+Alternatively, authenticate locally first and copy the token cache:
+```bash
+# Local machine - run auth
+python scripts/spotify_auth.py
+
+# Copy cache to RunPod
+scp ~/.scope-spotify/.spotify_token_cache runpod:~/.scope-spotify/
+```
 
 ## Development
 

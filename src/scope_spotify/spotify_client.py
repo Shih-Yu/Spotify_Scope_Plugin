@@ -1,13 +1,19 @@
 """Spotify API client for fetching currently playing track information."""
 
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
 logger = logging.getLogger(__name__)
+
+# Default cache location for Spotify tokens
+DEFAULT_CACHE_DIR = Path.home() / ".scope-spotify"
+DEFAULT_CACHE_FILE = DEFAULT_CACHE_DIR / ".spotify_token_cache"
 
 
 @dataclass
@@ -32,7 +38,11 @@ class TrackInfo:
 
 
 class SpotifyClient:
-    """Client for interacting with the Spotify Web API."""
+    """Client for interacting with the Spotify Web API.
+    
+    Supports both browser-based OAuth (for local development) and
+    manual authentication flow (for headless servers like RunPod).
+    """
     
     SCOPES = [
         "user-read-currently-playing",
@@ -44,6 +54,8 @@ class SpotifyClient:
         client_id: str,
         client_secret: str,
         redirect_uri: str = "http://localhost:8888/callback",
+        cache_path: Optional[str] = None,
+        headless_mode: bool = False,
     ):
         """Initialize the Spotify client with OAuth credentials.
         
@@ -51,29 +63,140 @@ class SpotifyClient:
             client_id: Spotify API Client ID
             client_secret: Spotify API Client Secret
             redirect_uri: OAuth redirect URI (must match Spotify app settings)
+            cache_path: Optional custom path for token cache file
+            headless_mode: If True, don't try to open browser (for servers)
         """
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
+        self.headless_mode = headless_mode
         self._spotify: Optional[spotipy.Spotify] = None
         self._last_track_id: Optional[str] = None
+        self._auth_manager: Optional[SpotifyOAuth] = None
         
-    def _ensure_authenticated(self) -> spotipy.Spotify:
-        """Ensure we have an authenticated Spotify client."""
-        if self._spotify is None:
+        # Set up cache path
+        if cache_path:
+            self.cache_path = Path(cache_path)
+        else:
+            self.cache_path = DEFAULT_CACHE_FILE
+        
+        # Ensure cache directory exists
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    def _get_auth_manager(self) -> SpotifyOAuth:
+        """Get or create the OAuth manager."""
+        if self._auth_manager is None:
             if not self.client_id or not self.client_secret:
                 raise ValueError(
                     "Spotify credentials not configured. "
                     "Please set Client ID and Client Secret in the pipeline settings."
                 )
             
-            auth_manager = SpotifyOAuth(
+            self._auth_manager = SpotifyOAuth(
                 client_id=self.client_id,
                 client_secret=self.client_secret,
                 redirect_uri=self.redirect_uri,
                 scope=" ".join(self.SCOPES),
-                open_browser=True,
+                cache_path=str(self.cache_path),
+                open_browser=not self.headless_mode,
             )
+        return self._auth_manager
+    
+    def get_auth_url(self) -> str:
+        """Get the authorization URL for manual authentication.
+        
+        Use this on headless servers (like RunPod) where browser auth isn't possible.
+        
+        Returns:
+            URL to visit in a browser to authorize the app
+        """
+        auth_manager = self._get_auth_manager()
+        return auth_manager.get_authorize_url()
+    
+    def complete_auth(self, redirect_url_or_code: str) -> bool:
+        """Complete authentication with the redirect URL or authorization code.
+        
+        After visiting the auth URL and authorizing, you'll be redirected to
+        a URL like: http://localhost:8888/callback?code=AQD...
+        
+        Pass either the full redirect URL or just the code parameter.
+        
+        Args:
+            redirect_url_or_code: The full redirect URL or just the auth code
+            
+        Returns:
+            True if authentication succeeded, False otherwise
+        """
+        try:
+            auth_manager = self._get_auth_manager()
+            
+            # Extract code if full URL provided
+            if "code=" in redirect_url_or_code:
+                # Parse the code from the URL
+                from urllib.parse import parse_qs, urlparse
+                parsed = urlparse(redirect_url_or_code)
+                code = parse_qs(parsed.query).get("code", [None])[0]
+            else:
+                code = redirect_url_or_code
+            
+            if not code:
+                logger.error("No authorization code found")
+                return False
+            
+            # Exchange code for token
+            auth_manager.get_access_token(code, as_dict=False)
+            logger.info("Spotify authentication completed successfully!")
+            logger.info(f"Token cached at: {self.cache_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Authentication failed: {e}")
+            return False
+    
+    def is_authenticated(self) -> bool:
+        """Check if we have valid cached credentials.
+        
+        Returns:
+            True if we have a valid (or refreshable) token cached
+        """
+        try:
+            auth_manager = self._get_auth_manager()
+            token_info = auth_manager.get_cached_token()
+            return token_info is not None
+        except Exception:
+            return False
+        
+    def _ensure_authenticated(self) -> spotipy.Spotify:
+        """Ensure we have an authenticated Spotify client."""
+        if self._spotify is None:
+            auth_manager = self._get_auth_manager()
+            
+            # Check for cached token first
+            token_info = auth_manager.get_cached_token()
+            
+            if token_info is None and self.headless_mode:
+                # On headless server without cached token, provide instructions
+                auth_url = self.get_auth_url()
+                logger.error("=" * 60)
+                logger.error("SPOTIFY AUTHENTICATION REQUIRED")
+                logger.error("=" * 60)
+                logger.error("Running on headless server - manual auth needed.")
+                logger.error("")
+                logger.error("Step 1: Visit this URL in your browser:")
+                logger.error(f"  {auth_url}")
+                logger.error("")
+                logger.error("Step 2: After authorizing, you'll be redirected to a URL like:")
+                logger.error("  http://localhost:8888/callback?code=AQD...")
+                logger.error("")
+                logger.error("Step 3: Copy the ENTIRE redirect URL")
+                logger.error("")
+                logger.error("Step 4: Use the auth helper script or API to complete auth")
+                logger.error("=" * 60)
+                raise ValueError(
+                    "Spotify authentication required. See logs for instructions. "
+                    "Or use Manual mode until authenticated."
+                )
+            
             self._spotify = spotipy.Spotify(auth_manager=auth_manager)
             logger.info("Spotify client authenticated successfully")
             

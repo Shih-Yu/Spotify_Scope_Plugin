@@ -55,6 +55,7 @@ class SpotifyPipeline(Pipeline):
         spotify_client_id: str = "",
         spotify_client_secret: str = "",
         spotify_redirect_uri: str = "http://localhost:8888/callback",
+        headless_mode: bool = True,
         genius_token: str = "",
         **kwargs,
     ):
@@ -65,6 +66,7 @@ class SpotifyPipeline(Pipeline):
             spotify_client_id: Spotify API Client ID
             spotify_client_secret: Spotify API Client Secret
             spotify_redirect_uri: OAuth redirect URI
+            headless_mode: If True, use manual auth flow (for servers like RunPod)
             genius_token: Genius API token for lyrics
             **kwargs: Additional arguments (ignored)
         """
@@ -75,6 +77,7 @@ class SpotifyPipeline(Pipeline):
             client_id=spotify_client_id,
             client_secret=spotify_client_secret,
             redirect_uri=spotify_redirect_uri,
+            headless_mode=headless_mode,
         )
         
         self.lyrics_client = LyricsClient(genius_token=genius_token)
@@ -83,7 +86,7 @@ class SpotifyPipeline(Pipeline):
         self._current_track: Optional[TrackInfo] = None
         self._current_lyrics_segment: Optional[str] = None
         
-        logger.info("SpotifyPipeline initialized")
+        logger.info(f"SpotifyPipeline initialized (headless_mode={headless_mode})")
 
     def prepare(self, **kwargs) -> Requirements:
         """Declare pipeline requirements.
