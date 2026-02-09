@@ -93,7 +93,7 @@ class SpotifyPipeline(Pipeline):
         return Requirements(input_size=0)
 
     def __call__(self, **kwargs) -> dict:
-        """Generate a prompt based on currently playing Spotify track.
+        """Generate a prompt based on currently playing Spotify track or manual input.
         
         Args:
             **kwargs: Runtime parameters from the UI
@@ -102,6 +102,7 @@ class SpotifyPipeline(Pipeline):
             Dict with 'prompt' key containing the generated prompt
         """
         # Get runtime parameters
+        input_source = kwargs.get("input_source", "manual")
         prompt_mode = kwargs.get("prompt_mode", "title")
         prompt_template = kwargs.get(
             "prompt_template",
@@ -115,12 +116,18 @@ class SpotifyPipeline(Pipeline):
         )
         lyrics_lines_per_prompt = kwargs.get("lyrics_lines_per_prompt", 2)
         
-        # Get current track from Spotify
-        track = self.spotify_client.get_current_track()
-        
-        if track is None or not track.is_playing:
-            logger.debug("No track playing, using fallback prompt")
-            return {"prompt": fallback_prompt}
+        # Get track info based on input source
+        if input_source == "manual":
+            # Manual mode - create TrackInfo from UI inputs
+            track = self._get_manual_track(kwargs)
+            logger.debug(f"Manual mode: {track.name} by {track.artist}")
+        else:
+            # Spotify mode - get from API
+            track = self.spotify_client.get_current_track()
+            
+            if track is None or not track.is_playing:
+                logger.debug("No track playing, using fallback prompt")
+                return {"prompt": fallback_prompt}
         
         self._current_track = track
         
@@ -144,6 +151,35 @@ class SpotifyPipeline(Pipeline):
         
         logger.debug(f"Generated prompt: {prompt[:100]}...")
         return {"prompt": prompt}
+
+    def _get_manual_track(self, kwargs: dict) -> TrackInfo:
+        """Create a TrackInfo from manual UI inputs.
+        
+        Args:
+            kwargs: Runtime parameters containing manual input values
+            
+        Returns:
+            TrackInfo populated from manual inputs
+        """
+        song_title = kwargs.get("manual_song_title", "Unknown Song")
+        artist = kwargs.get("manual_artist", "Unknown Artist")
+        album = kwargs.get("manual_album", "Unknown Album")
+        genre = kwargs.get("manual_genre", "")
+        progress = kwargs.get("manual_progress", 0.0)
+        
+        # Parse genres (allow comma-separated)
+        genres = [g.strip() for g in genre.split(",") if g.strip()]
+        
+        return TrackInfo(
+            track_id=f"manual-{song_title}-{artist}".replace(" ", "-").lower(),
+            name=song_title,
+            artist=artist,
+            album=album,
+            duration_ms=300000,  # Assume 5 minute song for manual mode
+            progress_ms=int(progress * 3000),  # Convert percentage to ms (of 5 min)
+            is_playing=True,
+            genres=genres,
+        )
 
     def _build_title_prompt(
         self,
