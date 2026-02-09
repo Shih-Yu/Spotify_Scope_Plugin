@@ -48,7 +48,8 @@ htmlcov/
 # Environment variables (DO NOT COMMIT!)
 .env
 .env.local
-*.env
+.env.production
+# Note: .env.example is allowed (it's a template with no real values)
 
 # OS
 .DS_Store
