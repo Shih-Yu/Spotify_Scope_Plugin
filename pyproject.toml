@@ -19,7 +19,7 @@ dependencies = [
 scope_spotify = "scope_spotify"
 
 [project.urls]
-Repository = "https://github.com/Shih-Yu/Sptoffy_Scope_Plugin"
+Repository = "https://github.com/Shih-Yu/Spotify_Scope_Plugin"
 
 [build-system]
 requires = ["hatchling"]

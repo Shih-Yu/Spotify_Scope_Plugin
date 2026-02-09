@@ -38,7 +38,7 @@ A [Daydream Scope](https://github.com/daydreamlive/scope) plugin that generates 
 
 **Option 1: From GitHub**
 ```
-git+https://github.com/Shih-Yu/Sptoffy_Scope_Plugin.git
+git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
 ```
 
 **Option 2: Local Development**
