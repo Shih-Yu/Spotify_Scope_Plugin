@@ -104,23 +104,26 @@ class SpotifyPipeline(Pipeline):
         Returns:
             Dict with 'prompt' key containing the generated prompt
         """
-        import os
+        from .config_manager import get_config_manager
         
-        # Get runtime parameters - check environment variables first (for preprocessor mode)
-        # since Scope UI doesn't show preprocessor settings yet
-        input_source = os.environ.get("SPOTIFY_INPUT_SOURCE") or kwargs.get("input_source", "manual")
-        prompt_mode = os.environ.get("SPOTIFY_PROMPT_MODE") or kwargs.get("prompt_mode", "title")
-        prompt_template = os.environ.get("SPOTIFY_PROMPT_TEMPLATE") or kwargs.get(
+        # Get config manager for live config updates (edit ~/.scope-spotify/config.json)
+        config = get_config_manager()
+        
+        # Get runtime parameters - priority: config file > env vars > kwargs > defaults
+        import os
+        input_source = config.get("input_source") or os.environ.get("SPOTIFY_INPUT_SOURCE") or kwargs.get("input_source", "manual")
+        prompt_mode = config.get("prompt_mode") or os.environ.get("SPOTIFY_PROMPT_MODE") or kwargs.get("prompt_mode", "title")
+        prompt_template = kwargs.get(
             "prompt_template",
             "A surreal, dreamlike artistic visualization of the song '{song}' by {artist}, {mood} atmosphere"
         )
-        art_style = os.environ.get("SPOTIFY_ART_STYLE") or kwargs.get("art_style", "surreal digital art")
+        art_style = config.get("art_style") or os.environ.get("SPOTIFY_ART_STYLE") or kwargs.get("art_style", "surreal digital art")
         include_genre_style = kwargs.get("include_genre_style", True)
         fallback_prompt = kwargs.get(
             "fallback_prompt",
             "Abstract flowing colors and shapes, ambient music visualization"
         )
-        lyrics_lines_per_prompt = int(os.environ.get("SPOTIFY_LYRICS_LINES", "0") or kwargs.get("lyrics_lines_per_prompt", 2))
+        lyrics_lines_per_prompt = config.get("lyrics_lines") or int(os.environ.get("SPOTIFY_LYRICS_LINES", "0") or kwargs.get("lyrics_lines_per_prompt", 2))
         
         # Get track info based on input source
         if input_source == "manual":
@@ -159,7 +162,7 @@ class SpotifyPipeline(Pipeline):
         return {"prompt": prompt}
 
     def _get_manual_track(self, kwargs: dict) -> TrackInfo:
-        """Create a TrackInfo from manual UI inputs or environment variables.
+        """Create a TrackInfo from config file, env vars, or UI inputs.
         
         Args:
             kwargs: Runtime parameters containing manual input values
@@ -168,13 +171,16 @@ class SpotifyPipeline(Pipeline):
             TrackInfo populated from manual inputs
         """
         import os
+        from .config_manager import get_config_manager
         
-        # Check environment variables first (for preprocessor mode workaround)
-        song_title = os.environ.get("SPOTIFY_SONG_TITLE") or kwargs.get("manual_song_title", "Unknown Song")
-        artist = os.environ.get("SPOTIFY_ARTIST") or kwargs.get("manual_artist", "Unknown Artist")
-        album = os.environ.get("SPOTIFY_ALBUM") or kwargs.get("manual_album", "Unknown Album")
-        genre = os.environ.get("SPOTIFY_GENRE") or kwargs.get("manual_genre", "")
-        progress = float(os.environ.get("SPOTIFY_PROGRESS", "0") or kwargs.get("manual_progress", 0.0))
+        config = get_config_manager()
+        
+        # Priority: config file > env vars > kwargs > defaults
+        song_title = config.get("song_title") or os.environ.get("SPOTIFY_SONG_TITLE") or kwargs.get("manual_song_title", "Unknown Song")
+        artist = config.get("artist") or os.environ.get("SPOTIFY_ARTIST") or kwargs.get("manual_artist", "Unknown Artist")
+        album = config.get("album") or os.environ.get("SPOTIFY_ALBUM") or kwargs.get("manual_album", "Unknown Album")
+        genre = config.get("genre") or os.environ.get("SPOTIFY_GENRE") or kwargs.get("manual_genre", "")
+        progress = config.get("progress") or float(os.environ.get("SPOTIFY_PROGRESS", "0") or kwargs.get("manual_progress", 0.0))
         
         # Parse genres (allow comma-separated)
         genres = [g.strip() for g in genre.split(",") if g.strip()]
