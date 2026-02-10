@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from scope.core.pipelines.base_schema import BasePipelineConfig, ModeDefaults, ui_field_config
+from scope.core.pipelines.base_schema import BasePipelineConfig, ModeDefaults, UsageType, ui_field_config
 
 
 class SpotifyConfig(BasePipelineConfig):
@@ -11,13 +11,16 @@ class SpotifyConfig(BasePipelineConfig):
     pipeline_id = "spotify-prompts"
     pipeline_name = "Spotify Prompt Generator"
     pipeline_description = (
-        "Generate AI image prompts from currently playing Spotify music. "
-        "Uses song metadata and lyrics to create dynamic visual prompts. "
-        "Supports manual input mode for testing without Spotify API."
+        "Generate AI image prompts from music. "
+        "Use as a PREPROCESSOR with any image generation pipeline. "
+        "Supports manual input or live Spotify playback."
     )
 
+    # This makes the plugin appear in the Preprocessor dropdown, not as a main pipeline
+    usage = [UsageType.PREPROCESSOR]
+    
     supports_prompts = True
-    modes = {"text": ModeDefaults(default=True)}
+    modes = {"video": ModeDefaults(default=True), "text": ModeDefaults(default=True)}
 
     # --- Input Source Selection (Runtime - top of UI) ---
 
