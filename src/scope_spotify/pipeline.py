@@ -104,20 +104,23 @@ class SpotifyPipeline(Pipeline):
         Returns:
             Dict with 'prompt' key containing the generated prompt
         """
-        # Get runtime parameters
-        input_source = kwargs.get("input_source", "manual")
-        prompt_mode = kwargs.get("prompt_mode", "title")
-        prompt_template = kwargs.get(
+        import os
+        
+        # Get runtime parameters - check environment variables first (for preprocessor mode)
+        # since Scope UI doesn't show preprocessor settings yet
+        input_source = os.environ.get("SPOTIFY_INPUT_SOURCE") or kwargs.get("input_source", "manual")
+        prompt_mode = os.environ.get("SPOTIFY_PROMPT_MODE") or kwargs.get("prompt_mode", "title")
+        prompt_template = os.environ.get("SPOTIFY_PROMPT_TEMPLATE") or kwargs.get(
             "prompt_template",
             "A surreal, dreamlike artistic visualization of the song '{song}' by {artist}, {mood} atmosphere"
         )
-        art_style = kwargs.get("art_style", "surreal digital art")
+        art_style = os.environ.get("SPOTIFY_ART_STYLE") or kwargs.get("art_style", "surreal digital art")
         include_genre_style = kwargs.get("include_genre_style", True)
         fallback_prompt = kwargs.get(
             "fallback_prompt",
             "Abstract flowing colors and shapes, ambient music visualization"
         )
-        lyrics_lines_per_prompt = kwargs.get("lyrics_lines_per_prompt", 2)
+        lyrics_lines_per_prompt = int(os.environ.get("SPOTIFY_LYRICS_LINES", "0") or kwargs.get("lyrics_lines_per_prompt", 2))
         
         # Get track info based on input source
         if input_source == "manual":
@@ -156,7 +159,7 @@ class SpotifyPipeline(Pipeline):
         return {"prompt": prompt}
 
     def _get_manual_track(self, kwargs: dict) -> TrackInfo:
-        """Create a TrackInfo from manual UI inputs.
+        """Create a TrackInfo from manual UI inputs or environment variables.
         
         Args:
             kwargs: Runtime parameters containing manual input values
@@ -164,11 +167,14 @@ class SpotifyPipeline(Pipeline):
         Returns:
             TrackInfo populated from manual inputs
         """
-        song_title = kwargs.get("manual_song_title", "Unknown Song")
-        artist = kwargs.get("manual_artist", "Unknown Artist")
-        album = kwargs.get("manual_album", "Unknown Album")
-        genre = kwargs.get("manual_genre", "")
-        progress = kwargs.get("manual_progress", 0.0)
+        import os
+        
+        # Check environment variables first (for preprocessor mode workaround)
+        song_title = os.environ.get("SPOTIFY_SONG_TITLE") or kwargs.get("manual_song_title", "Unknown Song")
+        artist = os.environ.get("SPOTIFY_ARTIST") or kwargs.get("manual_artist", "Unknown Artist")
+        album = os.environ.get("SPOTIFY_ALBUM") or kwargs.get("manual_album", "Unknown Album")
+        genre = os.environ.get("SPOTIFY_GENRE") or kwargs.get("manual_genre", "")
+        progress = float(os.environ.get("SPOTIFY_PROGRESS", "0") or kwargs.get("manual_progress", 0.0))
         
         # Parse genres (allow comma-separated)
         genres = [g.strip() for g in genre.split(",") if g.strip()]
