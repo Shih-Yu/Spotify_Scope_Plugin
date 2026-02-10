@@ -91,9 +91,10 @@ class SpotifyPipeline(Pipeline):
     def prepare(self, **kwargs) -> Requirements:
         """Declare pipeline requirements.
         
-        This pipeline doesn't process video frames, it generates prompts.
+        Even though we generate prompts (not process video), we need
+        input_size >= 1 to avoid division by zero in Scope's processor.
         """
-        return Requirements(input_size=0)
+        return Requirements(input_size=1)
 
     def __call__(self, **kwargs) -> dict:
         """Generate a prompt based on currently playing Spotify track or manual input.
