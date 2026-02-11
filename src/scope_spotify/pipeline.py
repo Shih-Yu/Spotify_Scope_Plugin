@@ -1,4 +1,4 @@
-"""Minimal pipeline: current Spotify song title -> one prompt -> preprocessor."""
+"""Minimal pipeline: current Spotify song title -> one prompt -> preprocessor. Optional synced lyrics."""
 
 import logging
 import os
@@ -8,6 +8,11 @@ import torch
 
 from scope.core.pipelines.interface import Pipeline, Requirements
 
+from .lyrics_client import (
+    fetch_plain_lyrics,
+    fetch_synced_lyrics,
+    get_line_at_position,
+)
 from .schema import SpotifyConfig
 from .spotify_client import SpotifyClient, TrackInfo
 
@@ -36,6 +41,8 @@ class SpotifyPipeline(Pipeline):
         )
         self._spotify_client: Optional[SpotifyClient] = None
         self._spotify_credentials: Optional[tuple] = None
+        # Cache synced lyrics per track so we don't refetch every frame
+        self._synced_cache: Optional[tuple[str, int, list]] = None  # (track_id, duration_ms, lines)
 
     def prepare(self, **kwargs) -> Requirements:
         return Requirements(input_size=1)
@@ -76,15 +83,38 @@ class SpotifyPipeline(Pipeline):
 
         if track is None or not track.is_playing:
             prompt = fallback_prompt
+            self._synced_cache = None
             logger.warning(
                 "Spotify preprocessor: no track playing or API failed. Using fallback. "
                 "Check SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and token at ~/.scope-spotify/.spotify_token_cache"
             )
         else:
+            lyrics = ""
+            use_lyrics = kwargs.get("use_lyrics", False)
+            use_synced = kwargs.get("use_synced_lyrics", True)
+            lyrics_max = int(kwargs.get("lyrics_max_chars", 300) or 0)
+
+            if use_lyrics:
+                if use_synced:
+                    # Time-synced: current line from LRCLIB, cached per track
+                    cache = self._synced_cache
+                    if cache is None or cache[0] != track.track_id or cache[1] != track.duration_ms:
+                        duration_sec = max(1, track.duration_ms // 1000)
+                        lines = fetch_synced_lyrics(
+                            track.artist, track.name, track.album, duration_sec
+                        )
+                        self._synced_cache = (track.track_id, track.duration_ms, lines)
+                    else:
+                        lines = cache[2]
+                    lyrics = get_line_at_position(lines, track.progress_ms)
+                else:
+                    lyrics = fetch_plain_lyrics(track.artist, track.name, lyrics_max or 500)
+
+            format_kw: dict = {"song": track.name, "artist": track.artist, "lyrics": lyrics}
             try:
-                prompt = prompt_template.format(song=track.name, artist=track.artist)
+                prompt = prompt_template.format(**format_kw)
             except KeyError:
-                prompt = f"Artistic visualization of {track.name} by {track.artist}"
+                prompt = f"{track.name} by {track.artist}" + (f": {lyrics}" if lyrics else "")
             logger.warning("Spotify preprocessor: prompt from track: %s by %s", track.name, track.artist)
 
         return self._passthrough(kwargs, prompt)

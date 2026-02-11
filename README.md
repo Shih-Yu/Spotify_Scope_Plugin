@@ -136,10 +136,20 @@ Official docs: [Plugin development](https://docs.daydream.live/scope/guides/plug
 
 Default prompt is **just the song title** (`{song}`). In Scope’s Input/Settings when the Spotify preprocessor is selected you can set:
 
-- **Prompt Template** — e.g. `{song}` (default), or `{song} by {artist}`. Use `{song}` and `{artist}`.
+- **Prompt Template** — e.g. `{song}` (default), or `{song} by {artist}`. Use `{song}`, `{artist}`, and when lyrics are on, `{lyrics}`.
 - **Fallback Prompt** — used when no track is playing (default: “Abstract flowing colors and shapes”).
 
 You can also set `SPOTIFY_PROMPT_TEMPLATE` and `SPOTIFY_FALLBACK_PROMPT` in the environment if you prefer.
+
+### Lyrics synced with the song
+
+You can drive the prompt from the **current lyric line** so the image changes with the song:
+
+1. Turn **Use lyrics** on in the preprocessor settings.
+2. Keep **Synced with song** on (default). The plugin fetches time-synced lyrics from **LRCLIB** (free, no API key) and uses the line at the current playback position from Spotify.
+3. Set **Prompt Template** to something like `{lyrics}` or `{song}: {lyrics}` so the prompt updates as the track plays.
+
+If synced lyrics aren’t found for a track, or you turn **Synced with song** off, the plugin falls back to plain lyrics from Lyrics.ovh (a short snippet up to **Lyrics max length** characters). No Genius or other API keys are required for synced or plain lyrics.
 
 ---
 

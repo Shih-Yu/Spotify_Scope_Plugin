@@ -66,14 +66,46 @@ class SpotifyConfig(BasePipelineConfig):
         ),
     )
 
-    # --- Prompt: default = song title only; use {song} and {artist} in template ---
+    # --- Prompt: default = song title only; use {song}, {artist}, optional {lyrics} ---
 
     prompt_template: str = Field(
         default="{song}",
-        description="Prompt template. Use {song} and {artist}. Default is just the song title.",
+        description="Prompt template. Use {song}, {artist}, and optionally {lyrics} (when 'Use lyrics' is on).",
         json_schema_extra=ui_field_config(
             order=20,
             label="Prompt Template",
+            category="input",
+        ),
+    )
+
+    use_lyrics: bool = Field(
+        default=False,
+        description="Add lyrics to the prompt. When on, use 'Synced with song' for time-synced lines (recommended) or plain lyrics.",
+        json_schema_extra=ui_field_config(
+            order=21,
+            label="Use lyrics",
+            category="input",
+        ),
+    )
+
+    use_synced_lyrics: bool = Field(
+        default=True,
+        description="When 'Use lyrics' is on: sync prompt with current lyric line (LRCLIB). Off = plain lyrics snippet (Lyrics.ovh).",
+        json_schema_extra=ui_field_config(
+            order=22,
+            label="Synced with song",
+            category="input",
+        ),
+    )
+
+    lyrics_max_chars: int = Field(
+        default=300,
+        ge=0,
+        le=2000,
+        description="Max characters when using plain lyrics (ignored when synced).",
+        json_schema_extra=ui_field_config(
+            order=23,
+            label="Lyrics max length",
             category="input",
         ),
     )
@@ -82,7 +114,7 @@ class SpotifyConfig(BasePipelineConfig):
         default="Abstract flowing colors and shapes",
         description="Prompt when no track is playing",
         json_schema_extra=ui_field_config(
-            order=21,
+            order=24,
             label="Fallback Prompt",
             category="input",
         ),
