@@ -1,284 +1,120 @@
-# Scope Spotify Plugin
+# Scope Spotify Plugin (minimal)
 
-A [Daydream Scope](https://github.com/daydreamlive/scope) plugin that generates AI image prompts from your currently playing Spotify music.
-
-## Features
-
-- **Manual Mode**: Test prompt generation without Spotify API — just enter song details manually
-- **Real-time Spotify Integration**: Automatically detects what you're listening to (with Spotify app credentials)
-- **Title Mode**: Generate prompts based on song title, artist, album, and genre
-- **Lyrics Mode**: Uses title/metadata (no external lyrics API; extendable later)
-- **Genre-aware Styling**: Automatically adds visual style hints based on music genre
-- **Customizable Templates**: Full control over prompt generation
-
-## Quick Start (Manual Mode)
-
-**No API keys required!** You can test the plugin immediately using Manual Mode:
-
-1. Install the plugin in Scope
-2. Select **Spotify Prompt Generator** from the pipeline dropdown
-3. Set **Input Source** to `manual` (default)
-4. Enter a song title, artist, and genre
-5. Prompts are generated instantly!
-
-This is perfect for testing and development, or when Spotify API access is unavailable.
-
-## Installation
-
-### Prerequisites
-
-1. **Python 3.12+** and [uv](https://docs.astral.sh/uv/) package manager
-2. **Daydream Scope** installed and running
-3. **Spotify Developer App** (only needed for live Spotify mode — see below)
-
-### Install the Plugin
-
-**Option 1: From GitHub**
-
-Use the **HTTPS** URL. Do **not** use the SSH form (`git@github.com:...`) — it can cause install failures and 422 errors:
-```
-https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
-```
-If Scope expects a pip-style URL, use:
-```
-git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
-```
-If you still get "dependency conflict", check the server logs for the exact conflicting package; the plugin only requires Python ≥3.10 and `spotipy` (no version pin).
-
-**Option 2: Local Development**
-1. Clone this repository
-2. In Scope, go to Settings > Plugins
-3. Click Browse and select the `scope-spotify` folder
-
-### What You Need for Spotify (Live Playback)
-
-To use **Spotify mode** (live “now playing” from your account), you need a **Spotify app** and credentials:
-
-| What | Where to get it |
-|------|------------------|
-| **Spotify Developer Account** | [developer.spotify.com](https://developer.spotify.com) — sign in with your Spotify account |
-| **Create an app** | [Dashboard](https://developer.spotify.com/dashboard) → Create app → name it (e.g. “Scope Spotify”) |
-| **Client ID** | App dashboard → copy **Client ID** |
-| **Client Secret** | App dashboard → click **Show client secret** → copy **Client Secret** |
-| **Redirect URI** | In app settings, add: `http://127.0.0.1:8888/callback` (Spotify requires 127.0.0.1, not localhost) |
-
-Put these in `.env.local` or in the plugin’s load-time settings:
-
-- `SPOTIFY_CLIENT_ID`
-- `SPOTIFY_CLIENT_SECRET`
-- `SPOTIFY_REDIRECT_URI` (default `http://127.0.0.1:8888/callback`)
-
-**Manual mode** works with no API keys — you can test everything by entering song title, artist, and genre.
-
-## Critical: Pipeline vs Preprocessor (Why "nothing is happening")
-
-**The Spotify plugin does not generate images.** It only **creates the text prompt** from the song. You need:
-
-| Role | What to select | What it does |
-|------|----------------|--------------|
-| **Pipeline** (main) | **Stream Diffusion**, **LongLive**, or another image/video model | **Text → image** (the actual generator). |
-| **Preprocessor** | **Spotify Prompt Generator** | Builds the **prompt** from the current song and feeds it to the pipeline. |
-
-If **Pipeline** is set to "spotify-prompts", you are only running the prompt builder (and the credential fields appear), but there is no image model, so video stays black. **Use Spotify as the Preprocessor, not as the Pipeline.**
-
-**Do this:** Set **Pipeline** to an image gen model (e.g. Stream Diffusion, LongLive). Set **Preprocessor** to **Spotify Prompt Generator**. Then press **Play** in Scope. When set up this way, Scope often shows only the main pipeline’s settings, so the Spotify credential fields may not appear; use environment variables (see below).
-
-Prompts are built from **song title, artist, and genre** only — **no lyrics** yet (Spotify does not expose lyrics to third-party apps), so the prompt will not "preload with lyrics" until we add a lyrics API.
-
-### Why the song info is wrong
-
-If **Spotify Client ID** and **Spotify Client Secret** are **empty** in Settings, the plugin cannot call Spotify and shows **defaults** (e.g. Bohemian Rhapsody, Queen).
-
-- Fill in **Spotify Client ID** and **Spotify Client Secret** in the plugin Settings. When you correctly use Spotify as the **preprocessor**, Scope often shows only the main pipeline’s config, so these fields may **not** appear. Set env vars instead (see below). If the fields do appear (e.g. you had Spotify as pipeline), you can fill them in the UI. Otherwise set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` as environment variables on the machine running Scope.
-- **Redirect URI** must be exactly: `http://127.0.0.1:8888/callback` (not `callt`).
-- If Scope runs on a different machine than where you ran `spotify_auth.py`, copy the token cache from `~/.scope-spotify/.spotify_token_cache` to that machine, or run auth there.
+This plugin lets Scope **generate an image from whatever song is playing in Spotify**. It reads the current track (song title + artist), turns it into a prompt, and your image pipeline (e.g. Stream Diffusion) creates the image.
 
 ---
 
-## Where to Find the Plugin in Scope
+## What you need to do (in order)
 
-The plugin is a **Preprocessor**, not a main pipeline. The "Input Mode" dropdown (Text / Video) is Scope’s built-in setting — our options are under the **Preprocessor**:
+1. **Create a Spotify app** (one-time) and copy your Client ID and Client Secret.
+2. **Install the plugin in Scope** (paste the plugin URL in Scope’s plugin settings).
+3. **Tell the plugin your credentials** (Client ID and Secret) where Scope runs — e.g. in RunPod’s dashboard or via env vars.
+4. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open a URL in your browser, paste the redirect back).
+5. **In Scope:** set Pipeline to Stream Diffusion, Preprocessor to Spotify Prompt Generator, play a song in Spotify, then press **Play**.
 
-1. **Select your main pipeline** (e.g. an image or video generation model) in the main pipeline selector.
-2. **Add or select the Preprocessor**: open the **Preprocessor** dropdown (or “Add preprocessor” step) and choose **Spotify Prompt Generator**.
-3. Once it’s selected, the **Input** panel should show:
-   - **Input Source** — `manual` (enter song yourself) or `spotify` (use what’s playing).
-   - **Song Title**, **Artist**, **Album**, **Genre** (for manual mode).
-   - **Playback Progress %** (for testing).
+---
 
-If you don’t see these, check for a preprocessor/settings area for the current pipeline; Spotify Prompt Generator’s controls appear when it is the active preprocessor.
+## Step 1: Create a Spotify app (one-time)
 
-**Spotify mode:** Yes — you need to **start playing a track** in the Spotify app first. The plugin reads the “currently playing” track from the Spotify API, so something must be playing (or have just played) on the same account you authorized.
+1. Open [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account.
+2. Click **Create app**. Give it a name (e.g. “Scope”) and accept the terms.
+3. Open your new app. Copy **Client ID** and **Client Secret** (click “Show” next to Client Secret) and save them somewhere safe.
+4. Click **Settings**. Under **Redirect URI**, add exactly:  
+   `http://127.0.0.1:8888/callback`  
+   Save.
 
-## Lyrics / Karaoke-Style Prompts
+---
 
-Spotify’s in-app karaoke (synced “sing along” lyrics) is **not** available to third-party apps via the public Web API. Right now the plugin builds prompts from **song title, artist, album, and genre** (and optional progress %). There is no line-by-line synced lyrics yet.
+## Step 2: Install the plugin in Scope
 
-- **Current behavior:** “Lyrics” mode still uses title/metadata only (no external lyrics API).
-- **Possible later step:** We could add a lyrics provider (e.g. Musixmatch or another API) so prompts update line-by-line for a karaoke-style experience. That would require an extra API/key and is not implemented yet.
+1. In **Scope**, go to the place where you add or manage plugins (often **Settings** or **Plugins**).
+2. When it asks for a plugin URL or “Install from Git”, paste this (use the full line, no spaces at the start or end):
 
-## Configuration
+   ```
+   https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
+   ```
 
-### Manual Mode Settings (Runtime)
+3. Confirm or install. Wait until Scope says the plugin is installed.
 
-| Setting | Description |
-|---------|-------------|
-| Input Source | `manual` or `spotify` - choose where to get song info |
-| Song Title | Song name for prompt generation |
-| Artist | Artist name |
-| Album | Album name |
-| Genre | Music genre (rock, pop, electronic, jazz, etc.) |
-| Playback Progress % | Simulate playback position (0-100%) for lyrics sync |
+**Yes — you do need to install the plugin.** The auth script only does the one-time Spotify login; the plugin itself must be installed in Scope using the URL above.
 
-### Prompt Settings (Runtime)
+---
 
-| Setting | Description |
-|---------|-------------|
-| Prompt Mode | `title` (song info) or `lyrics` |
-| Prompt Template | Customizable template with variables |
-| Art Style | Style to append to all prompts |
-| Include Genre Style | Auto-add genre-based visual hints |
-| Lines Per Prompt | Lyric lines to combine |
-| Fallback Prompt | Used when no music playing (Spotify mode only) |
+## Step 3: Add your credentials where Scope runs
 
-### API Settings (Load-time, for Spotify mode)
+The plugin needs your **Client ID** and **Client Secret** on the same machine (or pod) where Scope is running.
 
-| Setting | Description |
-|---------|-------------|
-| Spotify Client ID | Your Spotify app Client ID |
-| Spotify Client Secret | Your Spotify app Client Secret |
-| Redirect URI | OAuth callback URL (default: `http://127.0.0.1:8888/callback`) |
-| Headless/Server Mode | Enable for RunPod/servers — uses manual auth flow |
+**If you use RunPod (or a similar cloud host):**
 
-### Template Variables
+- Many hosts have an **Environment** or **Secrets** section in the pod/dashboard where you can add variables **without using the terminal**. Look for something like “Environment variables”, “Pod configuration”, or “Secrets”.
+- Add two entries:
+  - Name: `SPOTIFY_CLIENT_ID`   → Value: your Client ID
+  - Name: `SPOTIFY_CLIENT_SECRET` → Value: your Client Secret
+- Save and restart the pod if it’s already running.
 
-Use these in your prompt template:
-- `{song}` - Song title
-- `{artist}` - Artist name
-- `{album}` - Album name
-- `{mood}` - Auto-detected mood from genre
-- `{genre}` - Music genre
-- `{lyrics}` - Current lyrics segment (lyrics mode only)
-
-## Usage
-
-### Manual Mode (No API Required)
-
-1. Launch Scope and select **Spotify Prompt Generator**
-2. Keep **Input Source** set to `manual`
-3. Enter song details (title, artist, genre)
-4. Adjust the **Playback Progress %** slider to test lyrics sync
-5. Watch prompts generate based on your input!
-
-### Spotify Mode (Live Playback)
-
-1. Get API credentials from [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Enter credentials in the plugin settings
-3. Set **Input Source** to `spotify`
-4. Start playing music on Spotify
-5. The plugin will authenticate (browser opens for first-time auth)
-6. Prompts are automatically generated from your live playback!
-
-## RunPod / Server Deployment
-
-This plugin is designed to work on headless servers like RunPod.
-
-### Manual Mode on RunPod (Recommended Start)
-
-Manual mode works immediately on RunPod with no additional setup:
-1. Install the plugin
-2. Use `manual` input source
-3. Enter song details or use env vars (e.g. `SPOTIFY_SONG_TITLE`, `SPOTIFY_ARTIST`)
-
-### Spotify Mode on RunPod (When API Available)
-
-Since RunPod doesn't have a browser, use the authentication helper script:
+**If you have to use the terminal:**  
+“Export” just means “set this value for the current session.” Run these two lines (replace the placeholders with your real Client ID and Secret):
 
 ```bash
-# SSH into your RunPod instance
-cd /path/to/scope-spotify
-
-# Run the auth helper
-python scripts/spotify_auth.py
+export SPOTIFY_CLIENT_ID="paste_your_client_id_here"
+export SPOTIFY_CLIENT_SECRET="paste_your_client_secret_here"
 ```
 
-The script will:
-1. Ask for your Spotify credentials
-2. Give you a URL to visit in your local browser
-3. You authorize the app and copy the redirect URL back
-4. Token is cached for the plugin to use
+---
 
-Alternatively, authenticate locally first and copy the token cache:
-```bash
-# Local machine - run auth
-python scripts/spotify_auth.py
+## Step 4: One-time Spotify login (auth script)
 
-# Copy cache to RunPod
-scp ~/.scope-spotify/.spotify_token_cache runpod:~/.scope-spotify/
-```
+The plugin needs a **one-time login** to your Spotify account on the machine where Scope runs (e.g. your RunPod). After that, it reuses the saved token.
 
-## Development
+**On RunPod:**
 
-### Local Development Setup
+1. Open the **web terminal** (or SSH) for your pod.
+2. The auth script lives in the **plugin repo**. If the repo isn’t on the pod yet, run:
+   ```bash
+   cd /app
+   git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
+   cd Spotify_Scope_Plugin/scope-spotify
+   ```
+3. Make sure the pod has your credentials (Step 3). Then run:
+   ```bash
+   python3 scripts/spotify_auth.py
+   ```
+4. The script will print a **URL**. On **your own computer**, open that URL in a browser, log in to Spotify if asked, and click **Allow**.
+5. The browser will redirect to a page that may not load; that’s OK. **Copy the entire URL** from the browser’s address bar (it will look like `http://127.0.0.1:8888/callback?code=...`).
+6. Back in the **RunPod terminal**, when the script asks for it, **paste that URL** and press Enter. When it says “Authentication successful”, you’re done. You don’t need to run this again unless you revoke the app or change accounts.
 
-```bash
-# Clone the repo
-git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
-cd Spotify_Scope_Plugin/scope-spotify
+---
 
-# Install in development mode
-pip install -e .
-```
+## Step 5: Use it in Scope
 
-### Testing Prompt Generation (Manual Mode)
+1. In Scope, set **Pipeline** to **Stream Diffusion** (or your chosen image pipeline).
+2. Set **Preprocessor** to **Spotify Prompt Generator**.
+3. In the Spotify app on your phone or computer, **start playing a song** (same account you used in Step 4).
+4. In Scope, press **Play**. The plugin will read the current track and send a prompt like “Artistic visualization of [song] by [artist]” to the pipeline, which will generate the image.
 
-```python
-from scope_spotify.spotify_client import TrackInfo
-from scope_spotify.pipeline import SpotifyPipeline
+You won’t see the song name in Scope’s UI; the prompt is used internally when you press Play.
 
-# Create pipeline (no API keys needed for manual mode)
-pipeline = SpotifyPipeline()
+---
 
-# Test with manual input
-result = pipeline(
-    input_source="manual",
-    manual_song_title="Bohemian Rhapsody",
-    manual_artist="Queen",
-    manual_genre="rock",
-    prompt_mode="title",
-)
+## If something doesn’t work
 
-print(result["prompt"])
-```
+- **Plugin not installed:** Make sure you added the plugin URL in Scope (Step 2) and that Scope finished installing it.
+- **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 4 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 3) are set there too.
+- **RunPod: “python: command not found”:** Use `python3` instead of `python` (e.g. `python3 scripts/spotify_auth.py`).
 
-### Testing Spotify Connection (when API available)
+---
 
-```python
-from scope_spotify.spotify_client import SpotifyClient
+## Optional: change the prompt text
 
-client = SpotifyClient(
-    client_id="YOUR_CLIENT_ID",
-    client_secret="YOUR_CLIENT_SECRET",
-)
+Default prompt: *“Artistic visualization of [song] by [artist]”*.  
 
-track = client.get_current_track()
-if track:
-    print(f"Now playing: {track.name} by {track.artist}")
-```
+If your host lets you set more environment variables, you can add:
 
-## Roadmap
+- `SPOTIFY_PROMPT_TEMPLATE` — e.g. `My style: {song} by {artist}` (must include `{song}` and `{artist}`).
+- `SPOTIFY_FALLBACK_PROMPT` — used when no song is playing (default: “Abstract flowing colors and shapes”).
 
-- [x] Phase 1: Basic song title/metadata prompts
-- [x] Phase 2: Spotify app integration (live playback)
-- [ ] Phase 3: Time-synced lyrics (optional lyrics API)
-- [ ] Phase 4: LLM-enhanced prompt generation
-- [ ] Phase 5: Mood/sentiment analysis for colors
+---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Credits
-
-- [Daydream Scope](https://github.com/daydreamlive/scope) — Real-time AI video platform
-- [Spotipy](https://github.com/spotipy-dev/spotipy) — Spotify Web API wrapper
+MIT.
