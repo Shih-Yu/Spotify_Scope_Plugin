@@ -75,13 +75,16 @@ class SpotifyPipeline(Pipeline):
 
         if track is None or not track.is_playing:
             prompt = fallback_prompt
-            logger.debug("No track playing, using fallback prompt")
+            logger.warning(
+                "Spotify preprocessor: no track playing or API failed. Using fallback. "
+                "Check SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and token at ~/.scope-spotify/.spotify_token_cache"
+            )
         else:
             try:
                 prompt = prompt_template.format(song=track.name, artist=track.artist)
             except KeyError:
                 prompt = f"Artistic visualization of {track.name} by {track.artist}"
-            logger.info("Prompt from track: %s by %s", track.name, track.artist)
+            logger.info("Spotify preprocessor: prompt from track: %s by %s", track.name, track.artist)
 
         return self._passthrough(kwargs, prompt)
 

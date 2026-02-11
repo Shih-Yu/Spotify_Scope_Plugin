@@ -94,6 +94,9 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 
 You won’t see the song name in Scope’s UI; the prompt is used internally when you press Play.
 
+**If the prompt still shows something like “A 3D animated scene. A panda” instead of your song:**  
+Scope may be showing the text you typed in the Prompts box instead of the preprocessor’s output. Try **clearing the Prompts box** (leave it empty) and press Play again — then the only prompt source is the Spotify preprocessor. If it still doesn’t change, check the **server logs** on the pod: look for `Spotify preprocessor: prompt from track: [song] by [artist]` (success) or `Spotify preprocessor: no track playing or API failed` (credentials/token issue). That will show whether the preprocessor ran and got the current track.
+
 ---
 
 ## If something doesn’t work
