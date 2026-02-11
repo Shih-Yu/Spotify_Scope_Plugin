@@ -96,4 +96,5 @@ class SpotifyPipeline(Pipeline):
             frames = frames.to(device=self.device, dtype=torch.float32) / 255.0
         else:
             frames = torch.zeros(1, 512, 512, 3, device=self.device)
-        return {"video": frames.clamp(0, 1), "prompt": prompt}
+        # Pass both keys: some Scope pipelines/UI use "prompt", others "prompts"
+        return {"video": frames.clamp(0, 1), "prompt": prompt, "prompts": prompt}

@@ -191,9 +191,11 @@ class SpotifyClient:
                 logger.error("Step 2: After authorizing, you'll be redirected to a URL like:")
                 logger.error("  http://127.0.0.1:8888/callback?code=AQD...")
                 logger.error("")
-                logger.error("Step 3: Copy the ENTIRE redirect URL")
+                logger.error("Step 3: Copy the ENTIRE redirect URL from your browser")
                 logger.error("")
-                logger.error("Step 4: Use the auth helper script or API to complete auth")
+                logger.error("Step 4: On THIS server (where Scope runs), run:")
+                logger.error("  cd /path/to/Spotify_Scope_Plugin && python3 scripts/spotify_auth.py")
+                logger.error("  When prompted, paste the redirect URL. Token will be saved for Scope.")
                 logger.error("=" * 60)
                 raise ValueError(
                     "Spotify authentication required. See logs for instructions. "

@@ -72,7 +72,7 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
    git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
    cd Spotify_Scope_Plugin
    ```
-3. Make sure the pod has your credentials (Step 3). Then run:
+3. Make sure the pod has your credentials (Step 3). If the script fails with `ModuleNotFoundError: No module named 'spotipy'`, install it first: `python3 -m pip install spotipy` (or `pip install spotipy` if `pip` is on PATH). Then run:
    ```bash
    python3 scripts/spotify_auth.py
    ```
@@ -91,7 +91,7 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 5. In Spotify (same account as in Step 4), **start playing a song**.
 6. In Scope, press **Play**. The prompt sent to the pipeline will be the current song title (default template `{song}`) or whatever you set in **Prompt Template** (e.g. `{song} by {artist}`).
 
-You won’t see the song name in Scope’s Prompts box; it’s sent internally. In server logs you should see `Spotify preprocessor: prompt from track: [song] by [artist]` when it works, or `Spotify preprocessor: no track playing or API failed` if credentials/token are missing.
+The **Prompts** box in Scope’s UI may keep showing old text (e.g. “blooming flowers”); Scope often doesn’t update that field from the preprocessor. The song title is still sent to the pipeline internally. Check the **generated image** (it should follow the current track) and the **server logs** (`Spotify preprocessor: prompt from track: [song] by [artist]`) to confirm the plugin is working.
 
 ---
 
