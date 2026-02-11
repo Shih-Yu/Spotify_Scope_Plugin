@@ -1,102 +1,36 @@
 """Configuration schema for the Spotify Prompt Generator pipeline."""
 
-from typing import Literal
-
 from pydantic import Field
 
 from scope.core.pipelines.base_schema import BasePipelineConfig, ModeDefaults, UsageType, ui_field_config
 
 
 class SpotifyConfig(BasePipelineConfig):
-    """Configuration for the Spotify Prompt Generator pipeline."""
+    """Configuration for the Spotify Prompt Generator pipeline.
+
+    Minimal: prompt = current Spotify song title (or template). Credentials can be
+    set in the Scope UI here or via env vars (SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET).
+    """
 
     pipeline_id = "spotify-prompts"
     pipeline_name = "Spotify Prompt Generator"
     pipeline_description = (
-        "Generate AI image prompts from music. "
-        "Use as a PREPROCESSOR with any image generation pipeline. "
-        "Supports manual input or live Spotify playback."
+        "Use the current Spotify track as the image prompt. "
+        "Use as a PREPROCESSOR with Stream Diffusion (or any image pipeline). "
+        "You must enable video or camera input so the preprocessor runs."
     )
 
-    # This makes the plugin appear in the Preprocessor dropdown, not as a main pipeline
     usage = [UsageType.PREPROCESSOR]
-
     supports_prompts = True
     modes = {"video": ModeDefaults(default=True), "text": ModeDefaults()}
 
-    # --- Input Source Selection (Runtime - top of UI) ---
-
-    input_source: Literal["manual", "spotify"] = Field(
-        default="manual",
-        description="Where to get song info: 'manual' (enter song details) or 'spotify' (live playback)",
-        json_schema_extra=ui_field_config(
-            order=0,
-            label="Input Source",
-            category="input",
-        ),
-    )
-
-    # --- Manual Input Fields (Runtime params) - show in Input panel ---
-
-    manual_song_title: str = Field(
-        default="Bohemian Rhapsody",
-        description="Song title for manual mode",
-        json_schema_extra=ui_field_config(
-            order=1,
-            label="Song Title",
-            category="input",
-        ),
-    )
-
-    manual_artist: str = Field(
-        default="Queen",
-        description="Artist name for manual mode",
-        json_schema_extra=ui_field_config(
-            order=2,
-            label="Artist",
-            category="input",
-        ),
-    )
-
-    manual_album: str = Field(
-        default="A Night at the Opera",
-        description="Album name for manual mode",
-        json_schema_extra=ui_field_config(
-            order=3,
-            label="Album",
-            category="input",
-        ),
-    )
-
-    manual_genre: str = Field(
-        default="rock",
-        description="Genre for manual mode (rock, pop, electronic, jazz, classical, hip hop, etc.)",
-        json_schema_extra=ui_field_config(
-            order=4,
-            label="Genre",
-            category="input",
-        ),
-    )
-
-    manual_progress: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=100.0,
-        description="Simulated playback progress (0-100%) for lyrics sync testing",
-        json_schema_extra=ui_field_config(
-            order=5,
-            label="Playback Progress %",
-            category="input",
-        ),
-    )
-
-    # --- Spotify Authentication (runtime so they show in Settings when preprocessor is selected) ---
+    # --- Spotify credentials (UI or env: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET) ---
 
     spotify_client_id: str = Field(
         default="",
-        description="Your Spotify API Client ID from developer.spotify.com (not needed for manual mode)",
+        description="Spotify API Client ID (or set SPOTIFY_CLIENT_ID in env)",
         json_schema_extra=ui_field_config(
-            order=50,
+            order=10,
             label="Spotify Client ID",
             category="configuration",
         ),
@@ -104,9 +38,9 @@ class SpotifyConfig(BasePipelineConfig):
 
     spotify_client_secret: str = Field(
         default="",
-        description="Your Spotify API Client Secret from developer.spotify.com (not needed for manual mode)",
+        description="Spotify API Client Secret (or set SPOTIFY_CLIENT_SECRET in env)",
         json_schema_extra=ui_field_config(
-            order=51,
+            order=11,
             label="Spotify Client Secret",
             category="configuration",
         ),
@@ -114,9 +48,9 @@ class SpotifyConfig(BasePipelineConfig):
 
     spotify_redirect_uri: str = Field(
         default="http://127.0.0.1:8888/callback",
-        description="Redirect URI configured in your Spotify app settings",
+        description="Redirect URI from your Spotify app settings",
         json_schema_extra=ui_field_config(
-            order=52,
+            order=12,
             label="Redirect URI",
             category="configuration",
         ),
@@ -124,83 +58,32 @@ class SpotifyConfig(BasePipelineConfig):
 
     headless_mode: bool = Field(
         default=True,
-        description="Enable for servers (RunPod, etc.) - uses manual auth flow instead of browser popup",
+        description="On for RunPod/servers (auth via URL + paste); off for local browser popup",
         json_schema_extra=ui_field_config(
-            order=53,
+            order=13,
             label="Headless/Server Mode",
             category="configuration",
         ),
     )
 
-    # --- Prompt Generation Settings (Runtime params) ---
-
-    prompt_mode: Literal["title", "lyrics"] = Field(
-        default="title",
-        description="What to use for prompt generation: 'title' (song info only) or 'lyrics'",
-        json_schema_extra=ui_field_config(
-            order=60,
-            label="Prompt Mode",
-        ),
-    )
+    # --- Prompt: default = song title only; use {song} and {artist} in template ---
 
     prompt_template: str = Field(
-        default="A surreal, dreamlike artistic visualization of the song '{song}' by {artist}, {mood} atmosphere, cinematic lighting",
-        description="Template for prompts. Variables: {song}, {artist}, {album}, {mood}, {genre}, {lyrics}",
+        default="{song}",
+        description="Prompt template. Use {song} and {artist}. Default is just the song title.",
         json_schema_extra=ui_field_config(
-            order=61, 
+            order=20,
             label="Prompt Template",
+            category="input",
         ),
     )
-
-    art_style: str = Field(
-        default="surreal digital art",
-        description="Art style to append to prompts",
-        json_schema_extra=ui_field_config(
-            order=62, 
-            label="Art Style",
-        ),
-    )
-
-    include_genre_style: bool = Field(
-        default=True,
-        description="Automatically add genre-based style hints to prompts",
-        json_schema_extra=ui_field_config(
-            order=63, 
-            label="Include Genre Style",
-        ),
-    )
-
-    # --- Lyrics Settings (Runtime params) ---
-
-    lyrics_line_duration: float = Field(
-        default=5.0,
-        ge=1.0,
-        le=30.0,
-        description="Seconds to display each lyric line before moving to next",
-        json_schema_extra=ui_field_config(
-            order=70, 
-            label="Lyric Line Duration",
-        ),
-    )
-
-    lyrics_lines_per_prompt: int = Field(
-        default=2,
-        ge=1,
-        le=6,
-        description="Number of lyric lines to combine per prompt",
-        json_schema_extra=ui_field_config(
-            order=71, 
-            label="Lines Per Prompt",
-        ),
-    )
-
-    # --- Fallback Settings ---
 
     fallback_prompt: str = Field(
-        default="Abstract flowing colors and shapes, ambient music visualization, ethereal atmosphere",
-        description="Prompt to use when no music is playing (Spotify mode only)",
+        default="Abstract flowing colors and shapes",
+        description="Prompt when no track is playing",
         json_schema_extra=ui_field_config(
-            order=80, 
+            order=21,
             label="Fallback Prompt",
+            category="input",
         ),
     )

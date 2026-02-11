@@ -1,6 +1,8 @@
 # Scope Spotify Plugin (minimal)
 
-This plugin lets Scope **generate an image from whatever song is playing in Spotify**. It reads the current track (song title + artist), turns it into a prompt, and your image pipeline (e.g. Stream Diffusion) creates the image.
+This plugin makes the **current Spotify song title** (or a short template like “{song} by {artist}”) the **image prompt** in Scope. Your image pipeline (e.g. Stream Diffusion) then generates from that prompt.
+
+**Important:** Scope only runs the preprocessor when it has **video or camera input**. So you must **enable camera or video** in Scope (not text-only) and leave the **Prompts** box empty. Then the prompt becomes whatever is playing in Spotify.
 
 ---
 
@@ -8,9 +10,9 @@ This plugin lets Scope **generate an image from whatever song is playing in Spot
 
 1. **Create a Spotify app** (one-time) and copy your Client ID and Client Secret.
 2. **Install the plugin in Scope** (paste the plugin URL in Scope’s plugin settings).
-3. **Tell the plugin your credentials** (Client ID and Secret) where Scope runs — e.g. in RunPod’s dashboard or via env vars.
-4. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open a URL in your browser, paste the redirect back).
-5. **In Scope:** set Pipeline to Stream Diffusion, Preprocessor to Spotify Prompt Generator, play a song in Spotify, then press **Play**.
+3. **Set credentials** in Scope (Settings → when Spotify preprocessor is selected, fill Client ID and Secret) or via env vars on the server (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`).
+4. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open the URL in a browser, paste the redirect back).
+5. **In Scope:** Pipeline = Stream Diffusion, Preprocessor = Spotify Prompt Generator. **Turn on camera or video input.** Clear the Prompts box. Play a song in Spotify, then press **Play**.
 
 ---
 
@@ -42,23 +44,18 @@ This plugin lets Scope **generate an image from whatever song is playing in Spot
 
 ## Step 3: Add your credentials where Scope runs
 
-The plugin needs your **Client ID** and **Client Secret** on the same machine (or pod) where Scope is running.
+You can set credentials in **two ways** (Scope uses UI values first, then env):
 
-**If you use RunPod (or a similar cloud host):**
+**Option A — In Scope UI (recommended):**  
+When the Spotify preprocessor is selected, open **Settings** and fill in **Spotify Client ID** and **Spotify Client Secret**. No need to export env vars.
 
-- Many hosts have an **Environment** or **Secrets** section in the pod/dashboard where you can add variables **without using the terminal**. Look for something like “Environment variables”, “Pod configuration”, or “Secrets”.
-- Add two entries:
-  - Name: `SPOTIFY_CLIENT_ID`   → Value: your Client ID
-  - Name: `SPOTIFY_CLIENT_SECRET` → Value: your Client Secret
-- Save and restart the pod if it’s already running.
+**Option B — Environment variables (e.g. RunPod):**  
+In the pod’s Environment/Secrets (or in the terminal for the session):
 
-**If you have to use the terminal:**  
-“Export” just means “set this value for the current session.” Run these two lines (replace the placeholders with your real Client ID and Secret):
+- `SPOTIFY_CLIENT_ID` = your Client ID  
+- `SPOTIFY_CLIENT_SECRET` = your Client Secret  
 
-```bash
-export SPOTIFY_CLIENT_ID="paste_your_client_id_here"
-export SPOTIFY_CLIENT_SECRET="paste_your_client_secret_here"
-```
+Restart the pod after changing env vars if Scope is already running.
 
 ---
 
@@ -73,7 +70,7 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
    ```bash
    cd /app
    git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
-   cd Spotify_Scope_Plugin/scope-spotify
+   cd Spotify_Scope_Plugin
    ```
 3. Make sure the pod has your credentials (Step 3). Then run:
    ```bash
@@ -87,15 +84,14 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 
 ## Step 5: Use it in Scope
 
-1. In Scope, set **Pipeline** to **Stream Diffusion** (or your chosen image pipeline).
+1. Set **Pipeline** to **Stream Diffusion** (or your image pipeline).
 2. Set **Preprocessor** to **Spotify Prompt Generator**.
-3. In the Spotify app on your phone or computer, **start playing a song** (same account you used in Step 4).
-4. In Scope, press **Play**. The plugin will read the current track and send a prompt like “Artistic visualization of [song] by [artist]” to the pipeline, which will generate the image.
+3. **Enable video or camera input** — Scope only runs the preprocessor when it has frames. If you use text-only (no camera/video), the Spotify preprocessor is never called and the prompt will not be the song title.
+4. **Leave the Prompts box empty** so the preprocessor’s prompt (the song) is used.
+5. In Spotify (same account as in Step 4), **start playing a song**.
+6. In Scope, press **Play**. The prompt sent to the pipeline will be the current song title (default template `{song}`) or whatever you set in **Prompt Template** (e.g. `{song} by {artist}`).
 
-You won’t see the song name in Scope’s UI; the prompt is used internally when you press Play.
-
-**If the prompt still shows something like “A 3D animated scene. A panda” instead of your song:**  
-Scope may be showing the text you typed in the Prompts box instead of the preprocessor’s output. Try **clearing the Prompts box** (leave it empty) and press Play again — then the only prompt source is the Spotify preprocessor. If it still doesn’t change, check the **server logs** on the pod: look for `Spotify preprocessor: prompt from track: [song] by [artist]` (success) or `Spotify preprocessor: no track playing or API failed` (credentials/token issue). That will show whether the preprocessor ran and got the current track.
+You won’t see the song name in Scope’s Prompts box; it’s sent internally. In server logs you should see `Spotify preprocessor: prompt from track: [song] by [artist]` when it works, or `Spotify preprocessor: no track playing or API failed` if credentials/token are missing.
 
 ---
 
@@ -105,16 +101,37 @@ Scope may be showing the text you typed in the Prompts box instead of the prepro
 - **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 4 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 3) are set there too.
 - **RunPod: “python: command not found”:** Use `python3` instead of `python` (e.g. `python3 scripts/spotify_auth.py`).
 
+### Preprocessor in chain but never runs
+
+Scope **only calls the first processor when there are video frames** in its queue. In **text-only** mode (no camera, no video), the client never sends frames, so the Spotify preprocessor is never run and the prompt stays whatever is in the Prompts box.
+
+- **Fix:** In Scope, **enable camera or video input** (e.g. turn on the camera or upload a short video). Then press Play with the Prompts box **empty**. You should see `Spotify preprocessor: __call__ invoked` and `prompt from track: [song] by [artist]` in the server logs, and the generated image will follow the song title.
+- **Credentials:** Set **Spotify Client ID** and **Spotify Client Secret** in Scope’s Settings (when the Spotify preprocessor is selected), or set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in the environment where Scope runs (e.g. RunPod).
+- **Token:** Run the auth script once on the same machine as Scope (`python3 scripts/spotify_auth.py`), then restart Scope so it picks up the token.
+
+For more on how Scope runs the chain, see **`scope-plugin-skill/`** in this repo and the [Pipeline architecture](https://docs.daydream.live/scope/reference/architecture/pipelines) docs.
+
+---
+
+## Developer / plugin build reference
+
+This repo includes **`scope-plugin-skill/`**, which describes how to build Scope plugins and how preprocessors fit into the pipeline chain. Use it when changing this plugin or debugging “preprocessor in chain but never runs”:
+
+- **`scope-plugin-skill/skills/create-scope-plugin/SKILL.md`** — Process and rules for building a Scope plugin.
+- **`scope-plugin-skill/skills/create-scope-plugin/reference.md`** — Technical reference: imports, schema, pipeline types (including preprocessor), I/O format, troubleshooting.
+
+Official docs: [Plugin development](https://docs.daydream.live/scope/guides/plugin-development), [Pipeline architecture](https://docs.daydream.live/scope/reference/architecture/pipelines).
+
 ---
 
 ## Optional: change the prompt text
 
-Default prompt: *“Artistic visualization of [song] by [artist]”*.  
+Default prompt is **just the song title** (`{song}`). In Scope’s Input/Settings when the Spotify preprocessor is selected you can set:
 
-If your host lets you set more environment variables, you can add:
+- **Prompt Template** — e.g. `{song}` (default), or `{song} by {artist}`. Use `{song}` and `{artist}`.
+- **Fallback Prompt** — used when no track is playing (default: “Abstract flowing colors and shapes”).
 
-- `SPOTIFY_PROMPT_TEMPLATE` — e.g. `My style: {song} by {artist}` (must include `{song}` and `{artist}`).
-- `SPOTIFY_FALLBACK_PROMPT` — used when no song is playing (default: “Abstract flowing colors and shapes”).
+You can also set `SPOTIFY_PROMPT_TEMPLATE` and `SPOTIFY_FALLBACK_PROMPT` in the environment if you prefer.
 
 ---
 
