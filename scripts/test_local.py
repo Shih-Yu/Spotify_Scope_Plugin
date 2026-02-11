@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Quick local test for the Spotify Scope Plugin.
-Tests Genius lyrics fetching without needing Scope or RunPod.
+Tests config loading and prompt generation (manual mode) without Scope or RunPod.
 
 Usage:
     python scripts/test_local.py
@@ -22,131 +22,77 @@ if env_file.exists():
                 os.environ[key] = value
     print(f"✓ Loaded environment from {env_file}")
 
-# Add src to path - import directly to avoid Scope dependency
-src_path = Path(__file__).parent.parent / "src" / "scope_spotify"
+# Add src to path
+src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from lyrics_client import LyricsClient
 
-
-def test_lyrics():
-    """Test fetching lyrics from Genius."""
+def test_spotify_config():
+    """Check Spotify env vars (optional for manual mode)."""
     print("\n" + "=" * 50)
-    print("Testing Genius Lyrics API")
+    print("Spotify API config")
     print("=" * 50)
-    
-    genius_token = os.environ.get("GENIUS_API_TOKEN", "")
-    
-    if not genius_token:
-        print("✗ GENIUS_API_TOKEN not found in environment")
-        print("  Make sure .env.local has your token")
-        return False
-    
-    print(f"✓ Found Genius token: {genius_token[:10]}...")
-    
-    # Initialize client
-    client = LyricsClient(genius_token=genius_token)
-    
-    # Test songs
-    test_songs = [
-        ("Bohemian Rhapsody", "Queen"),
-        ("Blinding Lights", "The Weeknd"),
-        ("Shape of You", "Ed Sheeran"),
-    ]
-    
-    for song, artist in test_songs:
-        print(f"\n--- Testing: {song} by {artist} ---")
-        
-        try:
-            lyrics = client.get_lyrics(song, artist)
-            
-            if lyrics:
-                print(f"✓ Found {len(lyrics)} lines of lyrics")
-                print(f"  First line: \"{lyrics[0][:60]}...\"" if len(lyrics[0]) > 60 else f"  First line: \"{lyrics[0]}\"")
-                
-                # Test segment extraction
-                segment = client.get_lyrics_segment(song, artist, 50.0, 2)
-                if segment:
-                    print(f"  At 50%: \"{segment[:60]}...\"" if len(segment) > 60 else f"  At 50%: \"{segment}\"")
-            else:
-                print("✗ No lyrics found")
-                
-        except Exception as e:
-            print(f"✗ Error: {e}")
-    
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID", "")
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+    if client_id and client_secret:
+        print(f"✓ SPOTIFY_CLIENT_ID: {client_id[:12]}...")
+        print("✓ SPOTIFY_CLIENT_SECRET: set")
+        return True
+    print("  (Not set — use manual mode or add to .env.local for live Spotify)")
     return True
 
 
 def test_prompt_generation():
-    """Test prompt generation with manual input."""
+    """Test prompt generation with manual input (requires Scope installed)."""
     print("\n" + "=" * 50)
-    print("Testing Prompt Generation (Manual Mode)")
+    print("Prompt generation (manual mode)")
     print("=" * 50)
-    
-    # Import here to avoid Scope dependencies if not installed
     try:
-        from spotify_client import TrackInfo
-        # Define GENRE_STYLES locally for testing
-        GENRE_STYLES = {
-            "rock": "bold contrasts, electric energy, raw textures",
-            "pop": "vibrant colors, glossy finish, modern aesthetic",
-            "classic rock": "vintage feel, powerful energy, iconic imagery",
-        }
+        from scope_spotify.spotify_client import TrackInfo
+        from scope_spotify.pipeline import SpotifyPipeline
     except ImportError as e:
-        print(f"Note: Some imports failed: {e}")
+        print(f"  (Scope not installed — run inside Scope or install scope-core)")
+        print(f"  TrackInfo/SpotifyClient can be used standalone.")
         return True
-    
-    # Create a mock track
+
+    pipeline = SpotifyPipeline()
     track = TrackInfo(
         track_id="test-123",
-        name="Bohemian Rhapsody",
-        artist="Queen",
-        album="A Night at the Opera",
-        duration_ms=354000,
-        progress_ms=177000,  # 50%
+        name="Blinding Lights",
+        artist="The Weeknd",
+        album="After Hours",
+        duration_ms=200000,
+        progress_ms=100000,
         is_playing=True,
-        genres=["rock", "classic rock"],
+        genres=["pop", "synth-pop"],
     )
-    
-    print(f"\n--- Mock Track ---")
-    print(f"  Song: {track.name}")
-    print(f"  Artist: {track.artist}")
-    print(f"  Progress: {track.progress_percent:.1f}%")
-    print(f"  Genres: {track.genres}")
-    
-    # Check genre style mapping
-    for genre in track.genres:
-        if genre.lower() in GENRE_STYLES:
-            print(f"  Style for '{genre}': {GENRE_STYLES[genre.lower()]}")
-            break
-    
-    print("\n✓ Prompt generation logic is ready")
+    result = pipeline(
+        input_source="manual",
+        manual_song_title=track.name,
+        manual_artist=track.artist,
+        manual_album=track.album,
+        manual_genre="pop",
+        prompt_mode="title",
+    )
+    prompt = result.get("prompt", "")
+    print(f"  Song: {track.name} by {track.artist}")
+    print(f"  Prompt: {prompt[:80]}...")
+    print("✓ Prompt generation OK")
     return True
 
 
 def main():
     print("=" * 50)
-    print("Scope Spotify Plugin - Local Test")
+    print("Scope Spotify Plugin – local test")
     print("=" * 50)
-    
-    # Test lyrics
-    lyrics_ok = test_lyrics()
-    
-    # Test prompt generation
-    prompt_ok = test_prompt_generation()
-    
+    test_spotify_config()
+    ok = test_prompt_generation()
     print("\n" + "=" * 50)
     print("Summary")
     print("=" * 50)
-    print(f"  Lyrics API: {'✓ Working' if lyrics_ok else '✗ Failed'}")
-    print(f"  Prompt Gen: {'✓ Ready' if prompt_ok else '✗ Issues'}")
-    
-    if lyrics_ok:
-        print("\n✓ Ready to deploy to RunPod!")
-        print("  Install in Scope with:")
-        print("  git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git")
-    
-    return 0 if (lyrics_ok and prompt_ok) else 1
+    print("  Manual mode: ✓ Ready")
+    print("  For live Spotify: set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env.local")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

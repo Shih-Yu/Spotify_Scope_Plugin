@@ -11,14 +11,25 @@ Usage:
 You'll need your Spotify API credentials from developer.spotify.com
 """
 
+import os
 import sys
 from pathlib import Path
 
-# Add the src directory to path for imports
-src_path = Path(__file__).parent.parent / "src"
-sys.path.insert(0, str(src_path))
+# Load .env.local if present (optional)
+env_file = Path(__file__).parent.parent / ".env.local"
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ[key] = value.strip()
 
-from scope_spotify.spotify_client import SpotifyClient
+# Import spotify_client directly so we don't load scope_spotify/__init__.py (which requires Scope)
+scope_spotify_path = Path(__file__).parent.parent / "src" / "scope_spotify"
+sys.path.insert(0, str(scope_spotify_path))
+
+from spotify_client import SpotifyClient
 
 
 def main():
@@ -27,24 +38,27 @@ def main():
     print("=" * 60)
     print()
     
-    # Get credentials
-    print("Enter your Spotify API credentials:")
-    print("(Get these from developer.spotify.com/dashboard)")
-    print()
+    # Get credentials from env or prompt
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", "").strip()
+    redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback").strip()
     
-    client_id = input("Client ID: ").strip()
     if not client_id:
-        print("Error: Client ID is required")
+        client_id = input("Client ID: ").strip()
+    if not client_id:
+        print("Error: Client ID is required (set SPOTIFY_CLIENT_ID in .env.local or enter here)")
         return 1
     
-    client_secret = input("Client Secret: ").strip()
     if not client_secret:
-        print("Error: Client Secret is required")
+        client_secret = input("Client Secret: ").strip()
+    if not client_secret:
+        print("Error: Client Secret is required (set SPOTIFY_CLIENT_SECRET in .env.local or enter here)")
         return 1
     
-    redirect_uri = input("Redirect URI [http://localhost:8888/callback]: ").strip()
     if not redirect_uri:
-        redirect_uri = "http://localhost:8888/callback"
+        redirect_uri = input("Redirect URI [http://127.0.0.1:8888/callback]: ").strip() or "http://127.0.0.1:8888/callback"
+    else:
+        print(f"Using redirect URI from .env.local: {redirect_uri}")
     
     print()
     print("-" * 60)
@@ -86,7 +100,7 @@ def main():
     print("Step 2: Log in and authorize the app")
     print()
     print("Step 3: You'll be redirected to a URL like:")
-    print("  http://localhost:8888/callback?code=AQBx...")
+    print("  http://127.0.0.1:8888/callback?code=AQBx...")
     print()
     print("  (The page won't load - that's expected!)")
     print("  Copy the ENTIRE URL from your browser's address bar.")

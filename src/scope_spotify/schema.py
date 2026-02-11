@@ -1,5 +1,7 @@
 """Configuration schema for the Spotify Prompt Generator pipeline."""
 
+from typing import Literal
+
 from pydantic import Field
 
 from scope.core.pipelines.base_schema import BasePipelineConfig, ModeDefaults, UsageType, ui_field_config
@@ -18,13 +20,13 @@ class SpotifyConfig(BasePipelineConfig):
 
     # This makes the plugin appear in the Preprocessor dropdown, not as a main pipeline
     usage = [UsageType.PREPROCESSOR]
-    
+
     supports_prompts = True
-    modes = {"video": ModeDefaults(default=True), "text": ModeDefaults(default=True)}
+    modes = {"video": ModeDefaults(default=True), "text": ModeDefaults()}
 
     # --- Input Source Selection (Runtime - top of UI) ---
 
-    input_source: str = Field(
+    input_source: Literal["manual", "spotify"] = Field(
         default="manual",
         description="Where to get song info: 'manual' (enter song details) or 'spotify' (live playback)",
         json_schema_extra=ui_field_config(
@@ -105,7 +107,7 @@ class SpotifyConfig(BasePipelineConfig):
     )
 
     spotify_redirect_uri: str = Field(
-        default="http://localhost:8888/callback",
+        default="http://127.0.0.1:8888/callback",
         description="Redirect URI configured in your Spotify app settings",
         json_schema_extra=ui_field_config(
             order=52, 
@@ -124,25 +126,13 @@ class SpotifyConfig(BasePipelineConfig):
         ),
     )
 
-    # --- Genius/Lyrics Authentication (Load-time params) ---
-
-    genius_token: str = Field(
-        default="",
-        description="Genius API access token for fetching lyrics (get one at genius.com/api-clients)",
-        json_schema_extra=ui_field_config(
-            order=54, 
-            label="Genius API Token",
-            is_load_param=True,
-        ),
-    )
-
     # --- Prompt Generation Settings (Runtime params) ---
 
-    prompt_mode: str = Field(
+    prompt_mode: Literal["title", "lyrics"] = Field(
         default="title",
         description="What to use for prompt generation: 'title' (song info only) or 'lyrics'",
         json_schema_extra=ui_field_config(
-            order=60, 
+            order=60,
             label="Prompt Mode",
         ),
     )

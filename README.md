@@ -4,10 +4,10 @@ A [Daydream Scope](https://github.com/daydreamlive/scope) plugin that generates 
 
 ## Features
 
-- **Manual Mode**: Test prompt generation without Spotify API - just enter song details manually
-- **Real-time Spotify Integration**: Automatically detects what you're listening to (when API available)
-- **Title Mode**: Generate prompts based on song title, artist, and genre
-- **Lyrics Mode**: Generate prompts from actual song lyrics synced to playback
+- **Manual Mode**: Test prompt generation without Spotify API — just enter song details manually
+- **Real-time Spotify Integration**: Automatically detects what you're listening to (with Spotify app credentials)
+- **Title Mode**: Generate prompts based on song title, artist, album, and genre
+- **Lyrics Mode**: Uses title/metadata (no external lyrics API; extendable later)
 - **Genre-aware Styling**: Automatically adds visual style hints based on music genre
 - **Customizable Templates**: Full control over prompt generation
 
@@ -29,8 +29,7 @@ This is perfect for testing and development, or when Spotify API access is unava
 
 1. **Python 3.12+** and [uv](https://docs.astral.sh/uv/) package manager
 2. **Daydream Scope** installed and running
-3. **Genius API Token** (optional, for lyrics in manual mode)
-4. **Spotify Developer Account** (only needed for live Spotify mode)
+3. **Spotify Developer App** (only needed for live Spotify mode — see below)
 
 ### Install the Plugin
 
@@ -44,23 +43,25 @@ git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
 2. In Scope, go to Settings > Plugins
 3. Click Browse and select the `scope-spotify` folder
 
-### Get API Credentials (Optional)
+### What You Need for Spotify (Live Playback)
 
-#### Genius API (for Lyrics) - Recommended
+To use **Spotify mode** (live “now playing” from your account), you need a **Spotify app** and credentials:
 
-1. Go to [Genius API Clients](https://genius.com/api-clients)
-2. Create a new API client
-3. Generate an access token
-4. Works with both manual and Spotify modes!
+| What | Where to get it |
+|------|------------------|
+| **Spotify Developer Account** | [developer.spotify.com](https://developer.spotify.com) — sign in with your Spotify account |
+| **Create an app** | [Dashboard](https://developer.spotify.com/dashboard) → Create app → name it (e.g. “Scope Spotify”) |
+| **Client ID** | App dashboard → copy **Client ID** |
+| **Client Secret** | App dashboard → click **Show client secret** → copy **Client Secret** |
+| **Redirect URI** | In app settings, add: `http://127.0.0.1:8888/callback` (Spotify requires 127.0.0.1, not localhost) |
 
-#### Spotify API (for Live Playback)
+Put these in `.env.local` or in the plugin’s load-time settings:
 
-> **Note:** As of February 2026, Spotify has temporarily paused new app creation. Check the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) for current status.
+- `SPOTIFY_CLIENT_ID`
+- `SPOTIFY_CLIENT_SECRET`
+- `SPOTIFY_REDIRECT_URI` (default `http://127.0.0.1:8888/callback`)
 
-1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app
-3. Note your **Client ID** and **Client Secret**
-4. Add `http://localhost:8888/callback` to Redirect URIs in app settings
+**Manual mode** works with no API keys — you can test everything by entering song title, artist, and genre.
 
 ## Configuration
 
@@ -88,15 +89,14 @@ After installing, select **Spotify Prompt Generator** from the pipeline dropdown
 | Lines Per Prompt | Lyric lines to combine |
 | Fallback Prompt | Used when no music playing (Spotify mode only) |
 
-### API Settings (Load-time, optional)
+### API Settings (Load-time, for Spotify mode)
 
 | Setting | Description |
 |---------|-------------|
-| Genius API Token | For lyrics fetching (works in manual mode too!) |
-| Spotify Client ID | Your Spotify API Client ID (only for Spotify mode) |
-| Spotify Client Secret | Your Spotify API Client Secret (only for Spotify mode) |
-| Redirect URI | OAuth callback URL (default: `http://localhost:8888/callback`) |
-| Headless/Server Mode | Enable for RunPod/servers - uses manual auth flow |
+| Spotify Client ID | Your Spotify app Client ID |
+| Spotify Client Secret | Your Spotify app Client Secret |
+| Redirect URI | OAuth callback URL (default: `http://127.0.0.1:8888/callback`) |
+| Headless/Server Mode | Enable for RunPod/servers — uses manual auth flow |
 
 ### Template Variables
 
@@ -127,15 +127,6 @@ Use these in your prompt template:
 5. The plugin will authenticate (browser opens for first-time auth)
 6. Prompts are automatically generated from your live playback!
 
-### Adding Lyrics
-
-To enable lyrics-based prompts:
-
-1. Get a free API token from [Genius](https://genius.com/api-clients)
-2. Enter the token in **Genius API Token** setting
-3. Set **Prompt Mode** to `lyrics`
-4. Lyrics will be fetched and used for visual prompts!
-
 ## RunPod / Server Deployment
 
 This plugin is designed to work on headless servers like RunPod.
@@ -145,7 +136,7 @@ This plugin is designed to work on headless servers like RunPod.
 Manual mode works immediately on RunPod with no additional setup:
 1. Install the plugin
 2. Use `manual` input source
-3. Optionally add Genius API token for lyrics
+3. Enter song details or use env vars (e.g. `SPOTIFY_SONG_TITLE`, `SPOTIFY_ARTIST`)
 
 ### Spotify Mode on RunPod (When API Available)
 
@@ -226,8 +217,8 @@ if track:
 ## Roadmap
 
 - [x] Phase 1: Basic song title/metadata prompts
-- [x] Phase 2: Lyrics integration via Genius API
-- [ ] Phase 3: Time-synced lyrics (Musixmatch/LRC)
+- [x] Phase 2: Spotify app integration (live playback)
+- [ ] Phase 3: Time-synced lyrics (optional lyrics API)
 - [ ] Phase 4: LLM-enhanced prompt generation
 - [ ] Phase 5: Mood/sentiment analysis for colors
 
@@ -237,6 +228,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Credits
 
-- [Daydream Scope](https://github.com/daydreamlive/scope) - Real-time AI video platform
-- [Spotipy](https://github.com/spotipy-dev/spotipy) - Spotify Web API wrapper
-- [LyricsGenius](https://github.com/johnwmillr/LyricsGenius) - Genius API wrapper
+- [Daydream Scope](https://github.com/daydreamlive/scope) — Real-time AI video platform
+- [Spotipy](https://github.com/spotipy-dev/spotipy) — Spotify Web API wrapper

@@ -1,13 +1,13 @@
 """Main pipeline for generating prompts from Spotify music."""
 
 import logging
+import os
 from typing import TYPE_CHECKING, Optional
 
 import torch
 
 from scope.core.pipelines.interface import Pipeline, Requirements
 
-from .lyrics_client import LyricsClient
 from .schema import SpotifyConfig
 from .spotify_client import SpotifyClient, TrackInfo
 
@@ -42,6 +42,23 @@ GENRE_STYLES = {
 }
 
 
+def _get_genre_style(genres: list[str]) -> str:
+    """Look up a visual style string from a list of genre tags.
+
+    Args:
+        genres: Genre strings (e.g. from Spotify artist info).
+
+    Returns:
+        Matching style description, or empty string if no match.
+    """
+    for genre in genres:
+        genre_lower = genre.lower()
+        for key, style in GENRE_STYLES.items():
+            if key in genre_lower:
+                return style
+    return ""
+
+
 class SpotifyPipeline(Pipeline):
     """Pipeline that generates prompts from Spotify music playback."""
 
@@ -54,94 +71,121 @@ class SpotifyPipeline(Pipeline):
         device: torch.device | None = None,
         spotify_client_id: str = "",
         spotify_client_secret: str = "",
-        spotify_redirect_uri: str = "http://localhost:8888/callback",
+        spotify_redirect_uri: str = "http://127.0.0.1:8888/callback",
         headless_mode: bool = True,
-        genius_token: str = "",
         **kwargs,
     ):
-        """Initialize the Spotify pipeline.
-        
-        Args:
-            device: Torch device (not used, but required by interface)
-            spotify_client_id: Spotify API Client ID
-            spotify_client_secret: Spotify API Client Secret
-            spotify_redirect_uri: OAuth redirect URI
-            headless_mode: If True, use manual auth flow (for servers like RunPod)
-            genius_token: Genius API token for lyrics
-            **kwargs: Additional arguments (ignored)
-        """
-        self.device = device or torch.device("cpu")
-        
-        # Initialize clients
+        self.device = (
+            device
+            if device is not None
+            else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        )
+
+        # Fall back to env vars for credentials (essential for RunPod)
+        spotify_client_id = spotify_client_id or os.environ.get("SPOTIFY_CLIENT_ID", "")
+        spotify_client_secret = spotify_client_secret or os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+        spotify_redirect_uri = spotify_redirect_uri or os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
+
+        # Initialize Spotify client
         self.spotify_client = SpotifyClient(
             client_id=spotify_client_id,
             client_secret=spotify_client_secret,
             redirect_uri=spotify_redirect_uri,
             headless_mode=headless_mode,
         )
-        
-        self.lyrics_client = LyricsClient(genius_token=genius_token)
-        
+
         # State tracking
         self._current_track: Optional[TrackInfo] = None
-        self._current_lyrics_segment: Optional[str] = None
-        
+
         logger.info(f"SpotifyPipeline initialized (headless_mode={headless_mode})")
 
     def prepare(self, **kwargs) -> Requirements:
-        """Declare pipeline requirements.
-        
-        Even though we generate prompts (not process video), we need
-        input_size >= 1 to avoid division by zero in Scope's processor.
-        """
+        """Declare that we need one input frame to pass through."""
         return Requirements(input_size=1)
 
+    # ------------------------------------------------------------------
+    # Parameter resolution helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve(kwargs: dict, config: dict, key_kwargs: str, key_config: str,
+                 env_var: str | None, default):
+        """Resolve a parameter with correct priority: kwargs > env > config > default.
+
+        UI controls (kwargs) should always win when the user sets them.
+        """
+        # kwargs from the Scope UI
+        val = kwargs.get(key_kwargs)
+        if val is not None:
+            return val
+
+        # Environment variable override
+        if env_var:
+            env_val = os.environ.get(env_var)
+            if env_val is not None:
+                return env_val
+
+        # Config file value
+        cfg_val = config.get(key_config)
+        if cfg_val is not None:
+            return cfg_val
+
+        return default
+
+    # ------------------------------------------------------------------
+    # Main entry point
+    # ------------------------------------------------------------------
+
     def __call__(self, **kwargs) -> dict:
-        """Generate a prompt based on currently playing Spotify track or manual input.
-        
-        Args:
-            **kwargs: Runtime parameters from the UI
-            
+        """Generate a prompt and pass through the input video frames.
+
         Returns:
-            Dict with 'prompt' key containing the generated prompt
+            Dict with "video" (THWC float32 [0,1]) and "prompt" (str).
         """
         from .config_manager import get_config_manager
-        
-        # Get config manager for live config updates (edit ~/.scope-spotify/config.json)
-        config = get_config_manager()
-        
-        # Get runtime parameters - priority: config file > env vars > kwargs > defaults
-        import os
-        input_source = config.get("input_source") or os.environ.get("SPOTIFY_INPUT_SOURCE") or kwargs.get("input_source", "manual")
-        prompt_mode = config.get("prompt_mode") or os.environ.get("SPOTIFY_PROMPT_MODE") or kwargs.get("prompt_mode", "title")
+
+        config = get_config_manager().get_all()
+
+        # Resolve runtime parameters (kwargs > env > config > defaults)
+        input_source = self._resolve(
+            kwargs, config, "input_source", "input_source",
+            "SPOTIFY_INPUT_SOURCE", "manual",
+        )
+        prompt_mode = self._resolve(
+            kwargs, config, "prompt_mode", "prompt_mode",
+            "SPOTIFY_PROMPT_MODE", "title",
+        )
         prompt_template = kwargs.get(
             "prompt_template",
-            "A surreal, dreamlike artistic visualization of the song '{song}' by {artist}, {mood} atmosphere"
+            "A surreal, dreamlike artistic visualization of the song '{song}' by {artist}, {mood} atmosphere, cinematic lighting",
         )
-        art_style = config.get("art_style") or os.environ.get("SPOTIFY_ART_STYLE") or kwargs.get("art_style", "surreal digital art")
+        art_style = self._resolve(
+            kwargs, config, "art_style", "art_style",
+            "SPOTIFY_ART_STYLE", "surreal digital art",
+        )
         include_genre_style = kwargs.get("include_genre_style", True)
         fallback_prompt = kwargs.get(
             "fallback_prompt",
-            "Abstract flowing colors and shapes, ambient music visualization"
+            "Abstract flowing colors and shapes, ambient music visualization",
         )
-        lyrics_lines_per_prompt = config.get("lyrics_lines") or int(os.environ.get("SPOTIFY_LYRICS_LINES", "0") or kwargs.get("lyrics_lines_per_prompt", 2))
-        
-        # Get track info based on input source
+        lyrics_lines_per_prompt = int(self._resolve(
+            kwargs, config, "lyrics_lines_per_prompt", "lyrics_lines",
+            "SPOTIFY_LYRICS_LINES", 2,
+        ))
+
+        # --- Get track info ---
         if input_source == "manual":
-            # Manual mode - create TrackInfo from UI inputs
-            track = self._get_manual_track(kwargs)
+            track = self._get_manual_track(kwargs, config)
             logger.debug(f"Manual mode: {track.name} by {track.artist}")
         else:
-            # Spotify mode - get from API
             track = self.spotify_client.get_current_track()
-            
             if track is None or not track.is_playing:
                 logger.debug("No track playing, using fallback prompt")
-                return {"prompt": fallback_prompt}
-        
+                return self._passthrough(kwargs, fallback_prompt)
+
         self._current_track = track
-        
-        # Build the prompt based on mode
+
+        # --- Build prompt ---
         if prompt_mode == "lyrics":
             prompt = self._build_lyrics_prompt(
                 track=track,
@@ -151,51 +195,80 @@ class SpotifyPipeline(Pipeline):
                 lines_per_prompt=lyrics_lines_per_prompt,
             )
         else:
-            # Default to title mode
             prompt = self._build_title_prompt(
                 track=track,
                 template=prompt_template,
                 art_style=art_style,
                 include_genre=include_genre_style,
             )
-        
-        logger.debug(f"Generated prompt: {prompt[:100]}...")
-        return {"prompt": prompt}
 
-    def _get_manual_track(self, kwargs: dict) -> TrackInfo:
-        """Create a TrackInfo from config file, env vars, or UI inputs.
-        
-        Args:
-            kwargs: Runtime parameters containing manual input values
-            
-        Returns:
-            TrackInfo populated from manual inputs
+        logger.debug(f"Generated prompt: {prompt[:100]}...")
+        return self._passthrough(kwargs, prompt)
+
+    # ------------------------------------------------------------------
+    # Video passthrough
+    # ------------------------------------------------------------------
+
+    def _passthrough(self, kwargs: dict, prompt: str) -> dict:
+        """Pass through input video frames and attach the generated prompt.
+
+        A preprocessor must return {"video": tensor} so the downstream
+        pipeline receives valid frames. We also forward the prompt.
         """
-        import os
-        from .config_manager import get_config_manager
-        
-        config = get_config_manager()
-        
-        # Priority: config file > env vars > kwargs > defaults
-        song_title = config.get("song_title") or os.environ.get("SPOTIFY_SONG_TITLE") or kwargs.get("manual_song_title", "Unknown Song")
-        artist = config.get("artist") or os.environ.get("SPOTIFY_ARTIST") or kwargs.get("manual_artist", "Unknown Artist")
-        album = config.get("album") or os.environ.get("SPOTIFY_ALBUM") or kwargs.get("manual_album", "Unknown Album")
-        genre = config.get("genre") or os.environ.get("SPOTIFY_GENRE") or kwargs.get("manual_genre", "")
-        progress = config.get("progress") or float(os.environ.get("SPOTIFY_PROGRESS", "0") or kwargs.get("manual_progress", 0.0))
-        
-        # Parse genres (allow comma-separated)
-        genres = [g.strip() for g in genre.split(",") if g.strip()]
-        
+        video = kwargs.get("video")
+
+        if video is not None and len(video) > 0:
+            frames = torch.stack([f.squeeze(0) for f in video], dim=0)
+            frames = frames.to(device=self.device, dtype=torch.float32) / 255.0
+        else:
+            # Text-only mode — generate a single black frame as placeholder
+            frames = torch.zeros(1, 512, 512, 3, device=self.device)
+
+        return {"video": frames.clamp(0, 1), "prompt": prompt}
+
+    # ------------------------------------------------------------------
+    # Track helpers
+    # ------------------------------------------------------------------
+
+    def _get_manual_track(self, kwargs: dict, config: dict) -> TrackInfo:
+        """Create a TrackInfo from UI inputs, env vars, or config file."""
+        song_title = self._resolve(
+            kwargs, config, "manual_song_title", "song_title",
+            "SPOTIFY_SONG_TITLE", "Unknown Song",
+        )
+        artist = self._resolve(
+            kwargs, config, "manual_artist", "artist",
+            "SPOTIFY_ARTIST", "Unknown Artist",
+        )
+        album = self._resolve(
+            kwargs, config, "manual_album", "album",
+            "SPOTIFY_ALBUM", "Unknown Album",
+        )
+        genre = self._resolve(
+            kwargs, config, "manual_genre", "genre",
+            "SPOTIFY_GENRE", "",
+        )
+        progress = float(self._resolve(
+            kwargs, config, "manual_progress", "progress",
+            "SPOTIFY_PROGRESS", 0.0,
+        ))
+
+        genres = [g.strip() for g in str(genre).split(",") if g.strip()]
+
         return TrackInfo(
             track_id=f"manual-{song_title}-{artist}".replace(" ", "-").lower(),
             name=song_title,
             artist=artist,
             album=album,
-            duration_ms=300000,  # Assume 5 minute song for manual mode
-            progress_ms=int(progress * 3000),  # Convert percentage to ms (of 5 min)
+            duration_ms=300000,  # Assume 5-minute song for manual mode
+            progress_ms=int(progress * 3000),  # percentage -> ms of 5 min
             is_playing=True,
             genres=genres,
         )
+
+    # ------------------------------------------------------------------
+    # Prompt builders
+    # ------------------------------------------------------------------
 
     def _build_title_prompt(
         self,
@@ -204,43 +277,21 @@ class SpotifyPipeline(Pipeline):
         art_style: str,
         include_genre: bool,
     ) -> str:
-        """Build a prompt using song title and metadata.
-        
-        Args:
-            track: Current track information
-            template: Prompt template string
-            art_style: Art style to append
-            include_genre: Whether to add genre-based style
-            
-        Returns:
-            Generated prompt string
-        """
-        # Determine mood/genre style
-        genre_style = ""
-        if include_genre and track.genres:
-            for genre in track.genres:
-                genre_lower = genre.lower()
-                for key, style in GENRE_STYLES.items():
-                    if key in genre_lower:
-                        genre_style = style
-                        break
-                if genre_style:
-                    break
-        
-        # Format the template
+        """Build a prompt using song title and metadata."""
+        genre_style = _get_genre_style(track.genres) if include_genre else ""
+
         prompt = template.format(
             song=track.name,
             artist=track.artist,
             album=track.album,
             mood=genre_style or "ethereal",
             genre=", ".join(track.genres[:2]) if track.genres else "ambient",
-            lyrics="",  # No lyrics in title mode
+            lyrics="",
         )
-        
-        # Append art style
+
         if art_style:
             prompt = f"{prompt}, {art_style}"
-        
+
         return prompt
 
     def _build_lyrics_prompt(
@@ -251,70 +302,7 @@ class SpotifyPipeline(Pipeline):
         include_genre: bool,
         lines_per_prompt: int,
     ) -> str:
-        """Build a prompt using song lyrics.
-        
-        Args:
-            track: Current track information
-            template: Prompt template string
-            art_style: Art style to append
-            include_genre: Whether to add genre-based style
-            lines_per_prompt: Number of lyric lines per prompt
-            
-        Returns:
-            Generated prompt string
-        """
-        # Try to get lyrics segment based on playback progress
-        lyrics_segment = self.lyrics_client.get_lyrics_segment(
-            song=track.name,
-            artist=track.artist,
-            progress_percent=track.progress_percent,
-            lines_per_segment=lines_per_prompt,
-        )
-        
-        self._current_lyrics_segment = lyrics_segment
-        
-        # If no lyrics found, fall back to title mode
-        if not lyrics_segment:
-            logger.debug(f"No lyrics found for {track.name}, using title mode")
-            return self._build_title_prompt(track, template, art_style, include_genre)
-        
-        # Determine genre style
-        genre_style = ""
-        if include_genre and track.genres:
-            for genre in track.genres:
-                genre_lower = genre.lower()
-                for key, style in GENRE_STYLES.items():
-                    if key in genre_lower:
-                        genre_style = style
-                        break
-                if genre_style:
-                    break
-        
-        # Build lyrics-based prompt
-        # Create a visual interpretation of the lyrics
-        prompt = f"Artistic visualization of: \"{lyrics_segment}\" - from '{track.name}' by {track.artist}"
-        
-        if genre_style:
-            prompt = f"{prompt}, {genre_style}"
-        
-        if art_style:
-            prompt = f"{prompt}, {art_style}"
-        
-        return prompt
-
-    def get_current_track_info(self) -> Optional[dict]:
-        """Get info about the current track (for debugging/display).
-        
-        Returns:
-            Dict with track info, or None
-        """
-        if self._current_track:
-            return {
-                "name": self._current_track.name,
-                "artist": self._current_track.artist,
-                "album": self._current_track.album,
-                "progress": f"{self._current_track.progress_percent:.1f}%",
-                "genres": self._current_track.genres,
-                "lyrics_segment": self._current_lyrics_segment,
-            }
-        return None
+        """Build a prompt; lyrics mode uses title + metadata (no external lyrics API)."""
+        # No lyrics source configured — use title-based prompt; {lyrics} stays empty
+        logger.debug("Lyrics mode: using title/metadata (no lyrics API)")
+        return self._build_title_prompt(track, template, art_style, include_genre)

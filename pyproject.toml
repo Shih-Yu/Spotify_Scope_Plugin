@@ -11,8 +11,7 @@ authors = [
 keywords = ["scope", "spotify", "ai", "prompts", "lyrics", "daydream"]
 
 dependencies = [
-    "spotipy>=2.23.0",
-    "lyricsgenius>=3.0.0",
+    "spotipy>=2.23.0",  # PyPI package name; imported as spotify in code
 ]
 
 [project.entry-points."scope"]

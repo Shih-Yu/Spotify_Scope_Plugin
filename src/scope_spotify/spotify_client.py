@@ -1,4 +1,7 @@
-"""Spotify API client for fetching currently playing track information."""
+"""Spotify API client for fetching currently playing track information.
+
+Uses the spotipy package (pip install spotipy), imported as spotify in code.
+"""
 
 import logging
 import os
@@ -6,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import spotipy
+import spotipy as spotify
 from spotipy.oauth2 import SpotifyOAuth
 
 logger = logging.getLogger(__name__)
@@ -53,7 +56,7 @@ class SpotifyClient:
         self,
         client_id: str,
         client_secret: str,
-        redirect_uri: str = "http://localhost:8888/callback",
+        redirect_uri: str = "http://127.0.0.1:8888/callback",
         cache_path: Optional[str] = None,
         headless_mode: bool = False,
     ):
@@ -70,7 +73,7 @@ class SpotifyClient:
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
         self.headless_mode = headless_mode
-        self._spotify: Optional[spotipy.Spotify] = None
+        self._spotify: Optional[spotify.Spotify] = None
         self._last_track_id: Optional[str] = None
         self._auth_manager: Optional[SpotifyOAuth] = None
         
@@ -117,7 +120,7 @@ class SpotifyClient:
         """Complete authentication with the redirect URL or authorization code.
         
         After visiting the auth URL and authorizing, you'll be redirected to
-        a URL like: http://localhost:8888/callback?code=AQD...
+        a URL like: http://127.0.0.1:8888/callback?code=AQD...
         
         Pass either the full redirect URL or just the code parameter.
         
@@ -166,7 +169,7 @@ class SpotifyClient:
         except Exception:
             return False
         
-    def _ensure_authenticated(self) -> spotipy.Spotify:
+    def _ensure_authenticated(self) -> spotify.Spotify:
         """Ensure we have an authenticated Spotify client."""
         if self._spotify is None:
             auth_manager = self._get_auth_manager()
@@ -186,7 +189,7 @@ class SpotifyClient:
                 logger.error(f"  {auth_url}")
                 logger.error("")
                 logger.error("Step 2: After authorizing, you'll be redirected to a URL like:")
-                logger.error("  http://localhost:8888/callback?code=AQD...")
+                logger.error("  http://127.0.0.1:8888/callback?code=AQD...")
                 logger.error("")
                 logger.error("Step 3: Copy the ENTIRE redirect URL")
                 logger.error("")
@@ -197,7 +200,7 @@ class SpotifyClient:
                     "Or use Manual mode until authenticated."
                 )
             
-            self._spotify = spotipy.Spotify(auth_manager=auth_manager)
+            self._spotify = spotify.Spotify(auth_manager=auth_manager)
             logger.info("Spotify client authenticated successfully")
             
         return self._spotify
@@ -247,7 +250,7 @@ class SpotifyClient:
             
             return track_info
             
-        except spotipy.SpotifyException as e:
+        except spotify.SpotifyException as e:
             logger.error(f"Spotify API error: {e}")
             return None
         except Exception as e:
