@@ -4,6 +4,14 @@ This plugin makes the **current Spotify song title** (or a short template like â
 
 **Important:** Scope only runs the preprocessor when it has **video or camera input**. So you must **enable camera or video** in Scope (not text-only) and leave the **Prompts** box empty. Then the prompt becomes whatever is playing in Spotify.
 
+### Video input only (no text-only mode)
+
+This plugin works **only when Scope is using video or camera input**. It does **not** work in text-only mode.
+
+- **Why:** Scope runs the first processor (the preprocessor) only when there are video frames in the pipeline. In text-only mode the client never sends frames, so the Spotify preprocessor is never called and the song title is never used as the prompt.
+- **What to do:** In Scope, turn on **Camera** or **Video** (file) so that frames are sent. Then the preprocessor runs and the current Spotify track becomes the prompt.
+- **Text-only in the future:** Supporting text-only (song as prompt with no video) would require a change in Scope itself (e.g. to run the preprocessor even when no frames are sent). That would be an issue or PR in the [Scope repo](https://github.com/daydreamlive/scope).
+
 ---
 
 ## What you need to do (in order)

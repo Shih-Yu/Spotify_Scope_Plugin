@@ -222,18 +222,7 @@ class SpotifyClient:
                 return None
             
             track = current["item"]
-            artist_ids = [artist["id"] for artist in track["artists"] if artist.get("id")]
-            
-            # Fetch genres from artist info
-            genres = []
-            if artist_ids:
-                try:
-                    artists_info = sp.artists(artist_ids[:1])  # Get first artist's genres
-                    if artists_info and artists_info.get("artists"):
-                        genres = artists_info["artists"][0].get("genres", [])
-                except Exception as e:
-                    logger.warning(f"Could not fetch artist genres: {e}")
-            
+            # We only need name and artist for the prompt; skip artist/genres API (often 403)
             track_info = TrackInfo(
                 track_id=track["id"],
                 name=track["name"],
@@ -242,7 +231,7 @@ class SpotifyClient:
                 duration_ms=track["duration_ms"],
                 progress_ms=current.get("progress_ms", 0),
                 is_playing=current.get("is_playing", False),
-                genres=genres,
+                genres=[],
             )
             
             # Log when track changes
