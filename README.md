@@ -34,9 +34,16 @@ This is perfect for testing and development, or when Spotify API access is unava
 ### Install the Plugin
 
 **Option 1: From GitHub**
+
+Use the **HTTPS** URL. Do **not** use the SSH form (`git@github.com:...`) — it can cause install failures and 422 errors:
+```
+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
+```
+If Scope expects a pip-style URL, use:
 ```
 git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
 ```
+If you still get "dependency conflict", check the server logs for the exact conflicting package; the plugin only requires Python ≥3.10 and `spotipy` (no version pin).
 
 **Option 2: Local Development**
 1. Clone this repository
@@ -63,9 +70,29 @@ Put these in `.env.local` or in the plugin’s load-time settings:
 
 **Manual mode** works with no API keys — you can test everything by entering song title, artist, and genre.
 
-## Configuration
+## Where to Find the Plugin in Scope
 
-After installing, select **Spotify Prompt Generator** from the pipeline dropdown.
+The plugin is a **Preprocessor**, not a main pipeline. The "Input Mode" dropdown (Text / Video) is Scope’s built-in setting — our options are under the **Preprocessor**:
+
+1. **Select your main pipeline** (e.g. an image or video generation model) in the main pipeline selector.
+2. **Add or select the Preprocessor**: open the **Preprocessor** dropdown (or “Add preprocessor” step) and choose **Spotify Prompt Generator**.
+3. Once it’s selected, the **Input** panel should show:
+   - **Input Source** — `manual` (enter song yourself) or `spotify` (use what’s playing).
+   - **Song Title**, **Artist**, **Album**, **Genre** (for manual mode).
+   - **Playback Progress %** (for testing).
+
+If you don’t see these, check for a preprocessor/settings area for the current pipeline; Spotify Prompt Generator’s controls appear when it is the active preprocessor.
+
+**Spotify mode:** Yes — you need to **start playing a track** in the Spotify app first. The plugin reads the “currently playing” track from the Spotify API, so something must be playing (or have just played) on the same account you authorized.
+
+## Lyrics / Karaoke-Style Prompts
+
+Spotify’s in-app karaoke (synced “sing along” lyrics) is **not** available to third-party apps via the public Web API. Right now the plugin builds prompts from **song title, artist, album, and genre** (and optional progress %). There is no line-by-line synced lyrics yet.
+
+- **Current behavior:** “Lyrics” mode still uses title/metadata only (no external lyrics API).
+- **Possible later step:** We could add a lyrics provider (e.g. Musixmatch or another API) so prompts update line-by-line for a karaoke-style experience. That would require an extra API/key and is not implemented yet.
+
+## Configuration
 
 ### Manual Mode Settings (Runtime)
 

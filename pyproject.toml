@@ -2,7 +2,7 @@
 name = "scope-spotify"
 version = "0.1.0"
 description = "Spotify integration for Daydream Scope - generate AI prompts from music and lyrics"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -11,7 +11,7 @@ authors = [
 keywords = ["scope", "spotify", "ai", "prompts", "lyrics", "daydream"]
 
 dependencies = [
-    "spotipy>=2.23.0",  # PyPI package name; imported as spotify in code
+    "spotipy",  # No version pin to avoid conflict with Scope's environment
 ]
 
 [project.entry-points."scope"]

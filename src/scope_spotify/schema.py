@@ -32,10 +32,11 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=0,
             label="Input Source",
+            category="input",
         ),
     )
 
-    # --- Manual Input Fields (Runtime params) ---
+    # --- Manual Input Fields (Runtime params) - show in Input panel ---
 
     manual_song_title: str = Field(
         default="Bohemian Rhapsody",
@@ -43,6 +44,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=1,
             label="Song Title",
+            category="input",
         ),
     )
 
@@ -52,6 +54,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=2,
             label="Artist",
+            category="input",
         ),
     )
 
@@ -61,6 +64,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=3,
             label="Album",
+            category="input",
         ),
     )
 
@@ -70,6 +74,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=4,
             label="Genre",
+            category="input",
         ),
     )
 
@@ -81,6 +86,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=5,
             label="Playback Progress %",
+            category="input",
         ),
     )
 
