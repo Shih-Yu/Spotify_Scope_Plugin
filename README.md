@@ -70,6 +70,31 @@ Put these in `.env.local` or in the plugin’s load-time settings:
 
 **Manual mode** works with no API keys — you can test everything by entering song title, artist, and genre.
 
+## Critical: Pipeline vs Preprocessor (Why "nothing is happening")
+
+**The Spotify plugin does not generate images.** It only **creates the text prompt** from the song. You need:
+
+| Role | What to select | What it does |
+|------|----------------|--------------|
+| **Pipeline** (main) | **Stream Diffusion**, **LongLive**, or another image/video model | **Text → image** (the actual generator). |
+| **Preprocessor** | **Spotify Prompt Generator** | Builds the **prompt** from the current song and feeds it to the pipeline. |
+
+If **Pipeline** is set to "spotify-prompts", you are only running the prompt builder (and the credential fields appear), but there is no image model, so video stays black. **Use Spotify as the Preprocessor, not as the Pipeline.**
+
+**Do this:** Set **Pipeline** to an image gen model (e.g. Stream Diffusion, LongLive). Set **Preprocessor** to **Spotify Prompt Generator**. Then press **Play** in Scope. When set up this way, Scope often shows only the main pipeline’s settings, so the Spotify credential fields may not appear; use environment variables (see below).
+
+Prompts are built from **song title, artist, and genre** only — **no lyrics** yet (Spotify does not expose lyrics to third-party apps), so the prompt will not "preload with lyrics" until we add a lyrics API.
+
+### Why the song info is wrong
+
+If **Spotify Client ID** and **Spotify Client Secret** are **empty** in Settings, the plugin cannot call Spotify and shows **defaults** (e.g. Bohemian Rhapsody, Queen).
+
+- Fill in **Spotify Client ID** and **Spotify Client Secret** in the plugin Settings. When you correctly use Spotify as the **preprocessor**, Scope often shows only the main pipeline’s config, so these fields may **not** appear. Set env vars instead (see below). If the fields do appear (e.g. you had Spotify as pipeline), you can fill them in the UI. Otherwise set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` as environment variables on the machine running Scope.
+- **Redirect URI** must be exactly: `http://127.0.0.1:8888/callback` (not `callt`).
+- If Scope runs on a different machine than where you ran `spotify_auth.py`, copy the token cache from `~/.scope-spotify/.spotify_token_cache` to that machine, or run auth there.
+
+---
+
 ## Where to Find the Plugin in Scope
 
 The plugin is a **Preprocessor**, not a main pipeline. The "Input Mode" dropdown (Text / Video) is Scope’s built-in setting — our options are under the **Preprocessor**:

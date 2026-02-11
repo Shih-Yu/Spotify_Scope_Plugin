@@ -90,15 +90,15 @@ class SpotifyConfig(BasePipelineConfig):
         ),
     )
 
-    # --- Spotify Authentication (Load-time params) ---
+    # --- Spotify Authentication (runtime so they show in Settings when preprocessor is selected) ---
 
     spotify_client_id: str = Field(
         default="",
         description="Your Spotify API Client ID from developer.spotify.com (not needed for manual mode)",
         json_schema_extra=ui_field_config(
-            order=50, 
+            order=50,
             label="Spotify Client ID",
-            is_load_param=True,
+            category="configuration",
         ),
     )
 
@@ -106,9 +106,9 @@ class SpotifyConfig(BasePipelineConfig):
         default="",
         description="Your Spotify API Client Secret from developer.spotify.com (not needed for manual mode)",
         json_schema_extra=ui_field_config(
-            order=51, 
+            order=51,
             label="Spotify Client Secret",
-            is_load_param=True,
+            category="configuration",
         ),
     )
 
@@ -116,9 +116,9 @@ class SpotifyConfig(BasePipelineConfig):
         default="http://127.0.0.1:8888/callback",
         description="Redirect URI configured in your Spotify app settings",
         json_schema_extra=ui_field_config(
-            order=52, 
+            order=52,
             label="Redirect URI",
-            is_load_param=True,
+            category="configuration",
         ),
     )
 
@@ -126,9 +126,9 @@ class SpotifyConfig(BasePipelineConfig):
         default=True,
         description="Enable for servers (RunPod, etc.) - uses manual auth flow instead of browser popup",
         json_schema_extra=ui_field_config(
-            order=53, 
+            order=53,
             label="Headless/Server Mode",
-            is_load_param=True,
+            category="configuration",
         ),
     )
 

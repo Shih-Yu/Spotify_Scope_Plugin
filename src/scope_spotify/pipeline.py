@@ -81,18 +81,9 @@ class SpotifyPipeline(Pipeline):
             else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         )
 
-        # Fall back to env vars for credentials (essential for RunPod)
-        spotify_client_id = spotify_client_id or os.environ.get("SPOTIFY_CLIENT_ID", "")
-        spotify_client_secret = spotify_client_secret or os.environ.get("SPOTIFY_CLIENT_SECRET", "")
-        spotify_redirect_uri = spotify_redirect_uri or os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
-
-        # Initialize Spotify client
-        self.spotify_client = SpotifyClient(
-            client_id=spotify_client_id,
-            client_secret=spotify_client_secret,
-            redirect_uri=spotify_redirect_uri,
-            headless_mode=headless_mode,
-        )
+        # Spotify client is lazy-initialized in __call__ from runtime kwargs (so UI credential fields work)
+        self._spotify_client: Optional[SpotifyClient] = None
+        self._spotify_credentials: Optional[tuple] = None  # (client_id, client_secret, redirect_uri, headless)
 
         # State tracking
         self._current_track: Optional[TrackInfo] = None
@@ -102,6 +93,23 @@ class SpotifyPipeline(Pipeline):
     def prepare(self, **kwargs) -> Requirements:
         """Declare that we need one input frame to pass through."""
         return Requirements(input_size=1)
+
+    def _get_spotify_client(self, kwargs: dict) -> SpotifyClient:
+        """Get or create Spotify client from runtime kwargs or env (so UI credential fields work)."""
+        client_id = kwargs.get("spotify_client_id") or os.environ.get("SPOTIFY_CLIENT_ID", "")
+        client_secret = kwargs.get("spotify_client_secret") or os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+        redirect_uri = kwargs.get("spotify_redirect_uri") or os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
+        headless = kwargs.get("headless_mode", True)
+        creds = (client_id, client_secret, redirect_uri, headless)
+        if self._spotify_client is None or self._spotify_credentials != creds:
+            self._spotify_credentials = creds
+            self._spotify_client = SpotifyClient(
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
+                headless_mode=headless,
+            )
+        return self._spotify_client
 
     # ------------------------------------------------------------------
     # Parameter resolution helpers
@@ -178,7 +186,8 @@ class SpotifyPipeline(Pipeline):
             track = self._get_manual_track(kwargs, config)
             logger.debug(f"Manual mode: {track.name} by {track.artist}")
         else:
-            track = self.spotify_client.get_current_track()
+            spotify_client = self._get_spotify_client(kwargs)
+            track = spotify_client.get_current_track()
             if track is None or not track.is_playing:
                 logger.debug("No track playing, using fallback prompt")
                 return self._passthrough(kwargs, fallback_prompt)
