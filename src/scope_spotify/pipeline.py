@@ -57,6 +57,7 @@ class SpotifyPipeline(Pipeline):
         return self._spotify_client
 
     def __call__(self, **kwargs) -> dict:
+        logger.warning("Spotify preprocessor: __call__ invoked (if you see this, the plugin is running)")
         prompt_template = (
             kwargs.get("prompt_template")
             or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "Artistic visualization of {song} by {artist}")
@@ -84,7 +85,7 @@ class SpotifyPipeline(Pipeline):
                 prompt = prompt_template.format(song=track.name, artist=track.artist)
             except KeyError:
                 prompt = f"Artistic visualization of {track.name} by {track.artist}"
-            logger.info("Spotify preprocessor: prompt from track: %s by %s", track.name, track.artist)
+            logger.warning("Spotify preprocessor: prompt from track: %s by %s", track.name, track.artist)
 
         return self._passthrough(kwargs, prompt)
 
