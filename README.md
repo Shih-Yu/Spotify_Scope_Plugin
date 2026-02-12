@@ -60,8 +60,8 @@ When the Spotify preprocessor is selected, open **Settings** and fill in **Spoti
 **Option B — Environment variables (e.g. RunPod):**  
 In the pod’s Environment/Secrets (or in the terminal for the session):
 
-- `SPOTIFY_CLIENT_ID` = your Client ID  
-- `SPOTIFY_CLIENT_SECRET` = your Client Secret  
+- `SPOTIFY_CLIENT_ID` = your Client ID
+- `SPOTIFY_CLIENT_SECRET` = your Client Secret
 
 Restart the pod after changing env vars if Scope is already running.
 
@@ -80,7 +80,15 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
    git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
    cd Spotify_Scope_Plugin
    ```
-3. Make sure the pod has your credentials (Step 3). If the script fails with `ModuleNotFoundError: No module named 'spotipy'`, install it first: `python3 -m pip install spotipy` (or `pip install spotipy` if `pip` is on PATH). Then run:
+   If the pod doesn't have pip (`python3 -m pip` says "No module named pip"), install it first:
+   ```bash
+   apt-get update && apt-get install -y python3-pip
+   ```
+   (If that fails, try `python3 -m ensurepip --upgrade`.) Then install the plugin's dependencies (so `spotipy` is available):
+   ```bash
+   python3 -m pip install .
+   ```
+3. Make sure the pod has your credentials (Step 3). Then run:
    ```bash
    python3 scripts/spotify_auth.py
    ```
