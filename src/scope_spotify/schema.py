@@ -69,7 +69,7 @@ class SpotifyConfig(BasePipelineConfig):
     # --- Prompt: default = song title only; use {song}, {artist}, optional {lyrics} ---
 
     prompt_template: str = Field(
-        default="{song}",
+        default="{lyrics}",
         description="Prompt template. Use {song}, {artist}, and optionally {lyrics} (when 'Use lyrics' is on).",
         json_schema_extra=ui_field_config(
             order=20,

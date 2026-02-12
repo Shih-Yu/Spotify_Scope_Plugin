@@ -67,7 +67,7 @@ class SpotifyPipeline(Pipeline):
         logger.warning("Spotify preprocessor: __call__ invoked (if you see this, the plugin is running)")
         prompt_template = (
             kwargs.get("prompt_template")
-            or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "{song}")
+            or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "{lyrics}")
         )
         fallback_prompt = (
             kwargs.get("fallback_prompt")
