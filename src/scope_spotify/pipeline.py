@@ -43,6 +43,7 @@ class SpotifyPipeline(Pipeline):
         self._spotify_credentials: Optional[tuple] = None
         # Cache synced lyrics per track so we don't refetch every frame
         self._synced_cache: Optional[tuple[str, int, list]] = None  # (track_id, duration_ms, lines)
+        self._last_logged_prompt: Optional[str] = None  # log prompt only when it changes
 
     def prepare(self, **kwargs) -> Requirements:
         return Requirements(input_size=1)
@@ -138,6 +139,12 @@ class SpotifyPipeline(Pipeline):
             except KeyError:
                 prompt = f"{track.name} by {track.artist}" + (f": {lyrics}" if lyrics else "")
             logger.warning("Spotify preprocessor: prompt from track: %s by %s", track.name, track.artist)
+
+        # Log the actual prompt when it changes so you can see what's driving the image
+        if prompt != getattr(self, "_last_logged_prompt", None):
+            self._last_logged_prompt = prompt
+            snippet = (prompt[:120] + "…") if len(prompt) > 120 else prompt
+            logger.warning("Spotify preprocessor: prompt sent to pipeline: %s", snippet or "(empty)")
 
         return self._passthrough(kwargs, prompt)
 
