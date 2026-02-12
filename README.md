@@ -168,6 +168,19 @@ You can also set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_PROMPT_TEMPLATE`, and `SPOTI
 
 Each preset builds the prompt from placeholders: `{song}` = track title, `{artist}` = artist name(s), `{lyrics}` = current lyric line (or plain lyrics snippet when synced lyrics are off).
 
+#### Comparison of prompt templates
+
+| Theme | Template string | Uses lyrics? |
+|-------|-----------------|--------------|
+| **Dreamy / abstract** | `{lyrics}, dreamlike, {song} by {artist}, soft lighting` | Yes |
+| **Lyrics + style** | `{lyrics}, inspired by {song} and {artist}, vivid` | Yes |
+| **Music video still** | `Music video frame: {lyrics}, "{song}" by {artist}, cinematic` | Yes |
+| **Minimal** | `{lyrics}` | Yes (only) |
+| **Song + artist** | `{song} by {artist}, vivid, cinematic` | No |
+| **Custom** | Whatever you set in **Prompt Template** | Your choice |
+
+#### Description (how each is built)
+
 | Theme | Description | How the prompt is built |
 |-------|-------------|-------------------------|
 | **Dreamy / abstract** | Soft, dreamlike visuals driven by the current lyric line and song. | `{lyrics}, dreamlike, {song} by {artist}, soft lighting` — lyrics first, then song/artist, with “dreamlike” and “soft lighting” so the image model leans abstract and soft. |
