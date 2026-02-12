@@ -75,27 +75,28 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 **On RunPod:**
 
 1. Open the **web terminal** (or SSH) for your pod.
-2. The auth script lives in the **plugin repo**. If the repo isn’t on the pod yet, run:
+2. Go to the **plugin repo**. If it isn’t on the pod yet, clone it:
    ```bash
    cd /app
    git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
    cd Spotify_Scope_Plugin
    ```
-   If the pod doesn't have pip (`python3 -m pip` says "No module named pip"), install it first:
+   If the repo is already there, run: `cd /app/Spotify_Scope_Plugin`
+3. **Install dependencies (required).** You must do this before running the auth script. If pip is missing, install it first:
    ```bash
    apt-get update && apt-get install -y python3-pip
    ```
-   (If that fails, try `python3 -m ensurepip --upgrade`.) Then install the plugin's dependencies (so `spotipy` is available):
+   (If that fails, try `python3 -m ensurepip --upgrade`.) Then install the plugin (this installs `spotipy`):
    ```bash
    python3 -m pip install .
    ```
-3. Make sure the pod has your credentials (Step 3). Then run:
+4. Make sure the pod has your credentials (Step 3). Then run the auth script:
    ```bash
    python3 scripts/spotify_auth.py
    ```
-4. The script will print a **URL**. On **your own computer**, open that URL in a browser, log in to Spotify if asked, and click **Allow**.
-5. The browser will redirect to a page that may not load; that’s OK. **Copy the entire URL** from the browser’s address bar (it will look like `http://127.0.0.1:8888/callback?code=...`).
-6. Back in the **RunPod terminal**, when the script asks for it, **paste that URL** and press Enter. When it says “Authentication successful”, you’re done. You don’t need to run this again unless you revoke the app or change accounts.
+5. The script will print a **URL**. On **your own computer**, open that URL in a browser, log in to Spotify if asked, and click **Allow**.
+6. The browser will redirect to a page that may not load; that’s OK. **Copy the entire URL** from the browser’s address bar (it will look like `http://127.0.0.1:8888/callback?code=...`).
+7. Back in the **RunPod terminal**, when the script asks for it, **paste that URL** and press Enter. When it says “Authentication successful”, you’re done. You don’t need to run this again unless you revoke the app or change accounts.
 
 ---
 
@@ -108,12 +109,24 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 5. In Spotify (same account as in Step 4), **start playing a song**.
 6. In Scope, press **Play**. The prompt sent to the pipeline will be the current song title (default template `{song}`) or whatever you set in **Prompt Template** (e.g. `{song} by {artist}`).
 
-The **Prompts** box in Scope’s UI may keep showing old text (e.g. “blooming flowers”); Scope often doesn’t update that field from the preprocessor. The song title is still sent to the pipeline internally. Check the **generated image** (it should follow the current track) and the **server logs** (`Spotify preprocessor: prompt from track: [song] by [artist]`) to confirm the plugin is working.
+The **Prompts** box in Scope’s UI may keep showing old text (e.g. “blooming flowers”); Scope often doesn’t update that field from the preprocessor. The song title is still sent to the pipeline internally. Check the **generated image** (it should follow the current track) and the **server logs** (see below) to confirm the plugin is working.
+
+### How to confirm the template is used (logs)
+
+The **container/Docker logs** (image pull, “create container”, “start container”) are not Scope’s application logs. To see that the Spotify preprocessor is using your selected template and the actual prompt:
+
+1. **Find Scope’s process logs** — On RunPod, open the **Logs** for the pod (or the Scope service/container) and look for lines that come from the Scope app after it has started (e.g. when you press Play).
+2. **Look for these lines** (they are logged at WARNING level so they are not filtered out):
+   - `Spotify preprocessor: template_theme=...` — shows which theme is active (`dreamy_abstract`, `lyrics_style`, `custom`, etc.).
+   - `Spotify preprocessor: prompt sent to pipeline: ...` — shows the first ~120 characters of the prompt sent to the image pipeline. That is the prompt built from your template + current song/lyrics.
+
+If you never see `Spotify preprocessor: __call__ invoked`, the preprocessor is not being called (e.g. no video/camera input).
 
 ---
 
 ## If something doesn’t work
 
+- **`ModuleNotFoundError: No module named 'spotipy'`:** You ran the auth script before installing dependencies. From the plugin repo root run `python3 -m pip install .`, then run `python3 scripts/spotify_auth.py` again. See Step 4, item 3 (install dependencies).
 - **Plugin not installed:** Make sure you added the plugin URL in Scope (Step 2) and that Scope finished installing it.
 - **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 4 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 3) are set there too.
 - **RunPod: “python: command not found”:** Use `python3` instead of `python` (e.g. `python3 scripts/spotify_auth.py`).
@@ -146,10 +159,25 @@ Official docs: [Plugin development](https://docs.daydream.live/scope/guides/plug
 In Scope’s Input/Settings when the Spotify preprocessor is selected you can set:
 
 - **Template theme** — Dropdown of preset styles: **Dreamy / abstract**, **Lyrics + style** (song/artist), **Music video still**, **Minimal** (lyrics only), **Song + artist**, or **Custom** (use your own template below).
-- **Prompt Template** — Used when Template theme is **Custom**. Use `{song}`, `{artist}`, and when lyrics are on, `{lyrics}` (e.g. `{song} by {artist}` or `{lyrics}, style of {artist}`).
+- **Prompt Template** — Used **only when** Template theme is **Custom**. When you pick a preset theme (e.g. Dreamy / abstract), this field is ignored and the preset’s template is used. When you pick **Custom**, type your template here using `{song}`, `{artist}`, and when lyrics are on, `{lyrics}` (e.g. `{song} by {artist}` or `{lyrics}, style of {artist}`).
 - **Fallback Prompt** — Used when no track is playing (default: “Abstract flowing colors and shapes”).
 
 You can also set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_PROMPT_TEMPLATE`, and `SPOTIFY_FALLBACK_PROMPT` in the environment if you prefer.
+
+### Template theme presets (how each is constructed)
+
+Each preset builds the prompt from placeholders: `{song}` = track title, `{artist}` = artist name(s), `{lyrics}` = current lyric line (or plain lyrics snippet when synced lyrics are off).
+
+| Theme | Description | How the prompt is built |
+|-------|-------------|-------------------------|
+| **Dreamy / abstract** | Soft, dreamlike visuals driven by the current lyric line and song. | `{lyrics}, dreamlike, {song} by {artist}, soft lighting` — lyrics first, then song/artist, with “dreamlike” and “soft lighting” so the image model leans abstract and soft. |
+| **Lyrics + style** | Lyrics drive the scene; song and artist add a vivid, inspired-by style. | `{lyrics}, inspired by {song} and {artist}, vivid` — lyric content as the main subject, with song/artist as style context. |
+| **Music video still** | Single frame that could be from a music video for the track. | `Music video frame: {lyrics}, "{song}" by {artist}, cinematic` — frames the prompt as a music-video shot, cinematic look. |
+| **Minimal** | Only the current lyric line (or lyrics snippet); no song/artist in the prompt. | `{lyrics}` — prompt is just the lyric text. Best with “Use lyrics” and “Synced with song” on. |
+| **Song + artist** | Track and artist only; no lyrics. Good when lyrics are off or you want simple, recognizable imagery. | `{song} by {artist}, vivid, cinematic` — title and artist plus “vivid, cinematic” for strong, film-like images. |
+| **Custom** | You type your own template in **Prompt Template** (see above). | Whatever you enter in the Prompt Template field, using `{song}`, `{artist}`, and optionally `{lyrics}`. |
+
+When **Use lyrics** is off, `{lyrics}` is empty in all presets that use it, so the prompt may be short (e.g. “, dreamlike, Get Lucky by Daft Punk, soft lighting” for dreamy_abstract). For best results with lyrics-based themes, turn **Use lyrics** on (and **Synced with song** on for line-by-line changes).
 
 ### Lyrics synced with the song
 

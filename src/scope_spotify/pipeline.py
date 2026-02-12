@@ -83,8 +83,10 @@ class SpotifyPipeline(Pipeline):
         )
         if template_theme == "custom" or template_theme not in PROMPT_TEMPLATE_PRESETS:
             prompt_template = custom_template
+            logger.warning("Spotify preprocessor: template_theme=custom, using Prompt Template from settings")
         else:
             prompt_template = PROMPT_TEMPLATE_PRESETS[template_theme]
+            logger.warning("Spotify preprocessor: template_theme=%s", template_theme)
         fallback_prompt = (
             kwargs.get("fallback_prompt")
             or os.environ.get("SPOTIFY_FALLBACK_PROMPT", "Abstract flowing colors and shapes")
