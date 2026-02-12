@@ -18,7 +18,7 @@ This plugin works **only when Scope is using video or camera input**. It does **
 
 1. **Create a Spotify app** (one-time) and copy your Client ID and Client Secret.
 2. **Install the plugin in Scope** (paste the plugin URL in Scope’s plugin settings).
-3. **Set credentials** via environment variables where Scope runs (e.g. RunPod pod env: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`).
+3. **Set up a RunPod pod** (use the [Scope template](https://console.runpod.io/deploy?template=aca8mw9ivw)) and **set credentials** via the pod’s environment variables (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, etc.).
 4. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open the URL in a browser, paste the redirect back).
 5. **In Scope:** Pipeline = Stream Diffusion, Preprocessor = Spotify Prompt Generator. **Turn on camera or video input.** Clear the Prompts box. Play a song in Spotify, then press **Play**.
 
@@ -52,7 +52,9 @@ This plugin works **only when Scope is using video or camera input**. It does **
 
 ## Step 3: Add your credentials where Scope runs
 
-The preprocessor reads credentials from **environment variables** only (no credential fields in the Scope UI). Set them when you create or edit your RunPod pod under **Pod → Edit → Environment Variables** (or **Secrets**). That way both Spotify and Scope’s pipeline (e.g. Stream Diffusion) have what they need:
+**Set up the pod with the Scope template:** Use RunPod’s Scope template to deploy a pod that already has Scope configured: **[Deploy with Scope template](https://console.runpod.io/deploy?template=aca8mw9ivw)**.
+
+The preprocessor reads credentials from **environment variables** only (no credential fields in the Scope UI). When you create or edit your RunPod pod, add the variables below under **Pod → Edit → Environment Variables** (or **Secrets**). That way both Spotify and Scope’s pipeline (e.g. Stream Diffusion) have what they need:
 
 - **Spotify (this plugin):**
   - `SPOTIFY_CLIENT_ID` = your Spotify Client ID
