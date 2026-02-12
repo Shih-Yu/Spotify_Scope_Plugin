@@ -74,7 +74,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=20,
             label="Prompt Template",
-            category="input",
+            category="configuration",
         ),
     )
 
@@ -84,7 +84,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=21,
             label="Use lyrics",
-            category="input",
+            category="configuration",
         ),
     )
 
@@ -94,7 +94,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=22,
             label="Synced with song",
-            category="input",
+            category="configuration",
         ),
     )
 
@@ -106,7 +106,7 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=23,
             label="Lyrics max length",
-            category="input",
+            category="configuration",
         ),
     )
 
@@ -116,6 +116,6 @@ class SpotifyConfig(BasePipelineConfig):
         json_schema_extra=ui_field_config(
             order=24,
             label="Fallback Prompt",
-            category="input",
+            category="configuration",
         ),
     )

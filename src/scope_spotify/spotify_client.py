@@ -193,9 +193,12 @@ class SpotifyClient:
                 logger.error("")
                 logger.error("Step 3: Copy the ENTIRE redirect URL from your browser")
                 logger.error("")
-                logger.error("Step 4: On THIS server (where Scope runs), run:")
-                logger.error("  cd /path/to/Spotify_Scope_Plugin && python3 scripts/spotify_auth.py")
-                logger.error("  When prompted, paste the redirect URL. Token will be saved for Scope.")
+                logger.error("Step 4: On THIS server (where Scope runs), in a terminal run:")
+                logger.error("  cd /app/Spotify_Scope_Plugin   # or wherever the repo is cloned (e.g. /app)")
+                logger.error("  python3 -m pip install spotipy   # if needed")
+                logger.error("  python3 scripts/spotify_auth.py")
+                logger.error("  When prompted, paste the redirect URL. Token saves to ~/.scope-spotify/")
+                logger.error("  Then RESTART Scope so it picks up the token.")
                 logger.error("=" * 60)
                 raise ValueError(
                     "Spotify authentication required. See logs for instructions. "
