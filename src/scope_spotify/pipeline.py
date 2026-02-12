@@ -90,9 +90,19 @@ class SpotifyPipeline(Pipeline):
             )
         else:
             lyrics = ""
-            use_lyrics = kwargs.get("use_lyrics", False)
-            use_synced = kwargs.get("use_synced_lyrics", True)
-            lyrics_max = int(kwargs.get("lyrics_max_chars", 300) or 0)
+            # Scope may pass snake_case (schema) or camelCase (frontend); env fallback if UI doesn't pass
+            use_lyrics = kwargs.get("use_lyrics", kwargs.get("useLyrics"))
+            if use_lyrics is None:
+                use_lyrics = os.environ.get("SPOTIFY_USE_LYRICS", "").lower() in ("1", "true", "yes")
+            use_synced = kwargs.get("use_synced_lyrics", kwargs.get("useSyncedLyrics"))
+            if use_synced is None:
+                use_synced = os.environ.get("SPOTIFY_USE_SYNCED_LYRICS", "1").lower() in ("1", "true", "yes")
+            lyrics_max = int(kwargs.get("lyrics_max_chars", kwargs.get("lyricsMaxChars", 300)) or 0)
+            # Log so we can see if Scope is passing the lyrics toggles
+            logger.info(
+                "Spotify preprocessor: use_lyrics=%s, use_synced_lyrics=%s",
+                use_lyrics, use_synced,
+            )
 
             if use_lyrics:
                 if use_synced:
@@ -104,9 +114,21 @@ class SpotifyPipeline(Pipeline):
                             track.artist, track.name, track.album, duration_sec
                         )
                         self._synced_cache = (track.track_id, track.duration_ms, lines)
+                        if not lines:
+                            logger.warning(
+                                "Spotify preprocessor: no synced lyrics found for %s by %s (LRCLIB). Using title only.",
+                                track.name, track.artist,
+                            )
                     else:
                         lines = cache[2]
                     lyrics = get_line_at_position(lines, track.progress_ms)
+                    # Log current line so you can verify sync in server logs (line changes as song plays)
+                    if lyrics:
+                        sec = track.progress_ms // 1000
+                        logger.info(
+                            "Spotify preprocessor: synced lyric @ %d:%02d — %s",
+                            sec // 60, sec % 60, lyrics[:80] + ("..." if len(lyrics) > 80 else ""),
+                        )
                 else:
                     lyrics = fetch_plain_lyrics(track.artist, track.name, lyrics_max or 500)
 
