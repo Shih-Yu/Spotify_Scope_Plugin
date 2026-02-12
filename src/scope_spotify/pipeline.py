@@ -93,13 +93,13 @@ class SpotifyPipeline(Pipeline):
             # Scope may pass snake_case (schema) or camelCase (frontend); env fallback if UI doesn't pass
             use_lyrics = kwargs.get("use_lyrics", kwargs.get("useLyrics"))
             if use_lyrics is None:
-                use_lyrics = os.environ.get("SPOTIFY_USE_LYRICS", "").lower() in ("1", "true", "yes")
+                use_lyrics = os.environ.get("SPOTIFY_USE_LYRICS", "1").lower() in ("1", "true", "yes")
             use_synced = kwargs.get("use_synced_lyrics", kwargs.get("useSyncedLyrics"))
             if use_synced is None:
                 use_synced = os.environ.get("SPOTIFY_USE_SYNCED_LYRICS", "1").lower() in ("1", "true", "yes")
             lyrics_max = int(kwargs.get("lyrics_max_chars", kwargs.get("lyricsMaxChars", 300)) or 0)
-            # Log so we can see if Scope is passing the lyrics toggles
-            logger.info(
+            # WARNING so it shows when Scope log level is WARNING (INFO often filtered)
+            logger.warning(
                 "Spotify preprocessor: use_lyrics=%s, use_synced_lyrics=%s",
                 use_lyrics, use_synced,
             )
@@ -125,7 +125,7 @@ class SpotifyPipeline(Pipeline):
                     # Log current line so you can verify sync in server logs (line changes as song plays)
                     if lyrics:
                         sec = track.progress_ms // 1000
-                        logger.info(
+                        logger.warning(
                             "Spotify preprocessor: synced lyric @ %d:%02d — %s",
                             sec // 60, sec % 60, lyrics[:80] + ("..." if len(lyrics) > 80 else ""),
                         )

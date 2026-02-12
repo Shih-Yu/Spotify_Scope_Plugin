@@ -14,6 +14,9 @@ dependencies = [
     "spotipy",  # No version pin to avoid conflict with Scope's environment
 ]
 
+[project.optional-dependencies]
+lyrics-app = ["fastapi", "uvicorn[standard]", "python-dotenv"]
+
 [project.entry-points."scope"]
 scope_spotify = "scope_spotify"
 

@@ -161,6 +161,39 @@ If synced lyrics aren’t found for a track, or you turn **Synced with song** of
 
 ---
 
+## Companion lyrics app (sing along)
+
+A small **companion app** shows synced lyrics in your browser while Scope runs the visuals. It uses the **same Spotify token** as the plugin (no second login) and the same LRCLIB synced lyrics.
+
+**Run it on the same machine as Scope** (e.g. your PC or RunPod). Open the lyrics page in a browser (or a second screen) and sing along while Scope generates the images.
+
+### Setup and run
+
+1. **Install the optional dependencies** (FastAPI + Uvicorn):
+   ```bash
+   uv sync --extra lyrics-app
+   ```
+   or with pip:
+   ```bash
+   pip install -e ".[lyrics-app]"
+   ```
+
+2. **Set the same Spotify env vars** as Scope (or rely on your shell/env):
+   - `SPOTIFY_CLIENT_ID`
+   - `SPOTIFY_CLIENT_SECRET`
+
+3. **Start the lyrics server** from the repo root:
+   ```bash
+   uv run python -m lyrics_app.server
+   ```
+   By default it listens on **http://0.0.0.0:8765**. Set `LYRICS_APP_PORT` to use another port.
+
+4. **Open in a browser**: go to **http://localhost:8765** (or your machine's hostname/port). Play a song in Spotify; the page shows the current lyric line and updates in sync.
+
+The app polls `/api/now` every second for the current track and lyric line. If no track is playing, it shows "Play something on Spotify".
+
+---
+
 ## License
 
 MIT.

@@ -79,7 +79,7 @@ class SpotifyConfig(BasePipelineConfig):
     )
 
     use_lyrics: bool = Field(
-        default=False,
+        default=True,
         description="Add lyrics to the prompt. When on, use 'Synced with song' for time-synced lines (recommended) or plain lyrics.",
         json_schema_extra=ui_field_config(
             order=21,
