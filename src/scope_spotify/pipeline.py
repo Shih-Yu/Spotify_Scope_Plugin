@@ -19,6 +19,15 @@ from .spotify_client import SpotifyClient, TrackInfo
 if TYPE_CHECKING:
     from scope.core.pipelines.base_schema import BasePipelineConfig
 
+# Preset templates: theme key -> template string. Used when template_theme != "custom".
+PROMPT_TEMPLATE_PRESETS: dict[str, str] = {
+    "dreamy_abstract": "{lyrics}, dreamlike, {song} by {artist}, soft lighting",
+    "lyrics_style": "{lyrics}, inspired by {song} and {artist}, vivid",
+    "music_video": 'Music video frame: {lyrics}, "{song}" by {artist}, cinematic',
+    "minimal": "{lyrics}",
+    "song_artist": "{song} by {artist}, vivid, cinematic",
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,10 +58,11 @@ class SpotifyPipeline(Pipeline):
         return Requirements(input_size=1)
 
     def _get_spotify_client(self, kwargs: dict) -> SpotifyClient:
-        client_id = kwargs.get("spotify_client_id") or os.environ.get("SPOTIFY_CLIENT_ID", "")
-        client_secret = kwargs.get("spotify_client_secret") or os.environ.get("SPOTIFY_CLIENT_SECRET", "")
-        redirect_uri = kwargs.get("spotify_redirect_uri") or os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
-        headless = kwargs.get("headless_mode", True)
+        # Credentials and redirect URI come from environment (e.g. RunPod pod env at setup).
+        client_id = os.environ.get("SPOTIFY_CLIENT_ID", "")
+        client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+        redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
+        headless = os.environ.get("SPOTIFY_HEADLESS", "true").lower() in ("1", "true", "yes")
         creds = (client_id, client_secret, redirect_uri, headless)
         if self._spotify_client is None or self._spotify_credentials != creds:
             self._spotify_credentials = creds
@@ -66,10 +76,15 @@ class SpotifyPipeline(Pipeline):
 
     def __call__(self, **kwargs) -> dict:
         logger.warning("Spotify preprocessor: __call__ invoked (if you see this, the plugin is running)")
-        prompt_template = (
+        template_theme = kwargs.get("template_theme") or kwargs.get("templateTheme") or os.environ.get("SPOTIFY_TEMPLATE_THEME", "dreamy_abstract")
+        custom_template = (
             kwargs.get("prompt_template")
             or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "{lyrics}")
         )
+        if template_theme == "custom" or template_theme not in PROMPT_TEMPLATE_PRESETS:
+            prompt_template = custom_template
+        else:
+            prompt_template = PROMPT_TEMPLATE_PRESETS[template_theme]
         fallback_prompt = (
             kwargs.get("fallback_prompt")
             or os.environ.get("SPOTIFY_FALLBACK_PROMPT", "Abstract flowing colors and shapes")

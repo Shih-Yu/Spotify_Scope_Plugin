@@ -18,7 +18,7 @@ This plugin works **only when Scope is using video or camera input**. It does **
 
 1. **Create a Spotify app** (one-time) and copy your Client ID and Client Secret.
 2. **Install the plugin in Scope** (paste the plugin URL in Scope’s plugin settings).
-3. **Set credentials** in Scope (Settings → when Spotify preprocessor is selected, fill Client ID and Secret) or via env vars on the server (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`).
+3. **Set credentials** via environment variables where Scope runs (e.g. RunPod pod env: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`).
 4. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open the URL in a browser, paste the redirect back).
 5. **In Scope:** Pipeline = Stream Diffusion, Preprocessor = Spotify Prompt Generator. **Turn on camera or video input.** Clear the Prompts box. Play a song in Spotify, then press **Play**.
 
@@ -52,16 +52,15 @@ This plugin works **only when Scope is using video or camera input**. It does **
 
 ## Step 3: Add your credentials where Scope runs
 
-You can set credentials in **two ways** (Scope uses UI values first, then env):
+The preprocessor reads credentials from **environment variables** only (no credential fields in the Scope UI). Set them when you create or edit your RunPod pod under **Pod → Edit → Environment Variables** (or **Secrets**). That way both Spotify and Scope’s pipeline (e.g. Stream Diffusion) have what they need:
 
-**Option A — In Scope UI (recommended):**  
-When the Spotify preprocessor is selected, open **Settings** and fill in **Spotify Client ID** and **Spotify Client Secret**. No need to export env vars.
-
-**Option B — Environment variables (e.g. RunPod):**  
-In the pod’s Environment/Secrets (or in the terminal for the session):
-
-- `SPOTIFY_CLIENT_ID` = your Client ID
-- `SPOTIFY_CLIENT_SECRET` = your Client Secret
+- **Spotify (this plugin):**
+  - `SPOTIFY_CLIENT_ID` = your Spotify Client ID
+  - `SPOTIFY_CLIENT_SECRET` = your Spotify Client Secret
+  - `SPOTIFY_REDIRECT_URI` = redirect URL (optional; default `http://127.0.0.1:8888/callback` — must match the Redirect URI in your [Spotify app settings](https://developer.spotify.com/dashboard))
+  - `SPOTIFY_HEADLESS` = set to `false` only if running Scope locally and you want the auth script to open a browser (default `true` for RunPod)
+- **Hugging Face (Scope / Stream Diffusion):**
+  - `HF_TOKEN` = your [Hugging Face access token](https://huggingface.co/settings/tokens) (required for downloading models)
 
 Restart the pod after changing env vars if Scope is already running.
 
@@ -122,7 +121,7 @@ The **Prompts** box in Scope’s UI may keep showing old text (e.g. “blooming 
 Scope **only calls the first processor when there are video frames** in its queue. In **text-only** mode (no camera, no video), the client never sends frames, so the Spotify preprocessor is never run and the prompt stays whatever is in the Prompts box.
 
 - **Fix:** In Scope, **enable camera or video input** (e.g. turn on the camera or upload a short video). Then press Play with the Prompts box **empty**. You should see `Spotify preprocessor: __call__ invoked` and `prompt from track: [song] by [artist]` in the server logs, and the generated image will follow the song title.
-- **Credentials:** Set **Spotify Client ID** and **Spotify Client Secret** in Scope’s Settings (when the Spotify preprocessor is selected), or set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in the environment where Scope runs (e.g. RunPod).
+- **Credentials:** Set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in the environment where Scope runs (e.g. RunPod pod env).
 - **Token:** Run the auth script once on the same machine as Scope (`python3 scripts/spotify_auth.py`), then restart Scope so it picks up the token.
 
 For more on how Scope runs the chain, see **`scope-plugin-skill/`** in this repo and the [Pipeline architecture](https://docs.daydream.live/scope/reference/architecture/pipelines) docs.
@@ -142,12 +141,13 @@ Official docs: [Plugin development](https://docs.daydream.live/scope/guides/plug
 
 ## Optional: change the prompt text
 
-Default prompt is **just the song title** (`{song}`). In Scope’s Input/Settings when the Spotify preprocessor is selected you can set:
+In Scope’s Input/Settings when the Spotify preprocessor is selected you can set:
 
-- **Prompt Template** — e.g. `{song}` (default), or `{song} by {artist}`. Use `{song}`, `{artist}`, and when lyrics are on, `{lyrics}`.
-- **Fallback Prompt** — used when no track is playing (default: “Abstract flowing colors and shapes”).
+- **Template theme** — Dropdown of preset styles: **Dreamy / abstract**, **Lyrics + style** (song/artist), **Music video still**, **Minimal** (lyrics only), **Song + artist**, or **Custom** (use your own template below).
+- **Prompt Template** — Used when Template theme is **Custom**. Use `{song}`, `{artist}`, and when lyrics are on, `{lyrics}` (e.g. `{song} by {artist}` or `{lyrics}, style of {artist}`).
+- **Fallback Prompt** — Used when no track is playing (default: “Abstract flowing colors and shapes”).
 
-You can also set `SPOTIFY_PROMPT_TEMPLATE` and `SPOTIFY_FALLBACK_PROMPT` in the environment if you prefer.
+You can also set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_PROMPT_TEMPLATE`, and `SPOTIFY_FALLBACK_PROMPT` in the environment if you prefer.
 
 ### Lyrics synced with the song
 
