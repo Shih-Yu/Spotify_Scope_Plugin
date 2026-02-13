@@ -76,24 +76,31 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 
 1. Open the **web terminal** (or SSH) for your pod.
 2. Go to the **plugin repo**. If it isn’t on the pod yet, clone it:
+
    ```bash
    cd /app
    git clone https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
    cd Spotify_Scope_Plugin
    ```
+
    If the repo is already there, run: `cd /app/Spotify_Scope_Plugin`
+
 3. **Install dependencies (required).** You must do this before running the auth script. If pip is missing, install it first:
+
    ```bash
    apt-get update && apt-get install -y python3-pip
    ```
-   (If that fails, try `python3 -m ensurepip --upgrade`.) Then install the plugin (this installs `spotipy`):
+
    ```bash
    python3 -m pip install .
    ```
+
 4. Make sure the pod has your credentials (Step 3). Then run the auth script:
+
    ```bash
    python3 scripts/spotify_auth.py
    ```
+
 5. The script will print a **URL**. On **your own computer**, open that URL in a browser, log in to Spotify if asked, and click **Allow**.
 6. The browser will redirect to a page that may not load; that’s OK. **Copy the entire URL** from the browser’s address bar (it will look like `http://127.0.0.1:8888/callback?code=...`).
 7. Back in the **RunPod terminal**, when the script asks for it, **paste that URL** and press Enter. When it says “Authentication successful”, you’re done. You don’t need to run this again unless you revoke the app or change accounts.
