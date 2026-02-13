@@ -17,9 +17,9 @@ This plugin works **only when Scope is using video or camera input**. It does **
 ## What you need to do (in order)
 
 1. **Create a Spotify app** (one-time) and copy your Client ID and Client Secret.
-2. **Install the plugin in Scope** (paste the plugin URL in Scope’s plugin settings).
-3. **Set up a RunPod pod** (use the [Scope template](https://console.runpod.io/deploy?template=aca8mw9ivw)) and **set credentials** via the pod’s environment variables (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, etc.).
-4. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open the URL in a browser, paste the redirect back).
+2. **Set up a RunPod pod** (use the [Scope template](https://console.runpod.io/deploy?template=aca8mw9ivw)) and **set credentials** via the pod’s environment variables (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, etc.).
+3. **Log in to Spotify once** on the machine where Scope runs (run the auth script, open the URL in a browser, paste the redirect back).
+4. **Install the plugin in Scope** (paste the plugin URL in Scope’s plugin settings).
 5. **In Scope:** Pipeline = Stream Diffusion, Preprocessor = Spotify Prompt Generator. **Turn on camera or video input.** Clear the Prompts box. Play a song in Spotify, then press **Play**.
 
 ---
@@ -35,22 +35,7 @@ This plugin works **only when Scope is using video or camera input**. It does **
 
 ---
 
-## Step 2: Install the plugin in Scope
-
-1. In **Scope**, go to the place where you add or manage plugins (often **Settings** or **Plugins**).
-2. When it asks for a plugin URL or “Install from Git”, paste this (use the full line, no spaces at the start or end):
-
-   ```
-   https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
-   ```
-
-3. Confirm or install. Wait until Scope says the plugin is installed.
-
-**Yes — you do need to install the plugin.** The auth script only does the one-time Spotify login; the plugin itself must be installed in Scope using the URL above.
-
----
-
-## Step 3: Add your credentials where Scope runs
+## Step 2: Add your credentials where Scope runs
 
 **Set up the pod with the Scope template:** Use RunPod’s Scope template to deploy a pod that already has Scope configured: **[Deploy with Scope template](https://console.runpod.io/deploy?template=aca8mw9ivw)**.
 
@@ -68,7 +53,7 @@ Restart the pod after changing env vars if Scope is already running.
 
 ---
 
-## Step 4: One-time Spotify login (auth script)
+## Step 3: One-time Spotify login (auth script)
 
 The plugin needs a **one-time login** to your Spotify account on the machine where Scope runs (e.g. your RunPod). After that, it reuses the saved token.
 
@@ -95,7 +80,7 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
    python3 -m pip install .
    ```
 
-4. Make sure the pod has your credentials (Step 3). Then run the auth script:
+4. Make sure the pod has your credentials (Step 2). Then run the auth script:
 
    ```bash
    python3 scripts/spotify_auth.py
@@ -107,13 +92,28 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 
 ---
 
+## Step 4: Install the plugin in Scope
+
+1. In **Scope**, go to the place where you add or manage plugins (often **Settings** or **Plugins**).
+2. When it asks for a plugin URL or “Install from Git”, paste this (use the full line, no spaces at the start or end):
+
+   ```
+   https://github.com/Shih-Yu/Spotify_Scope_Plugin.git
+   ```
+
+3. Confirm or install. Wait until Scope says the plugin is installed.
+
+**Yes — you do need to install the plugin.** The auth script only does the one-time Spotify login; the plugin itself must be installed in Scope using the URL above.
+
+---
+
 ## Step 5: Use it in Scope
 
 1. Set **Pipeline** to **Stream Diffusion** (or your image pipeline).
 2. Set **Preprocessor** to **Spotify Prompt Generator**.
 3. **Enable video or camera input** — Scope only runs the preprocessor when it has frames. If you use text-only (no camera/video), the Spotify preprocessor is never called and the prompt will not be the song title.
 4. **Leave the Prompts box empty** so the preprocessor’s prompt (the song) is used.
-5. In Spotify (same account as in Step 4), **start playing a song**.
+5. In Spotify (same account as in Step 3), **start playing a song**.
 6. In Scope, press **Play**. The prompt sent to the pipeline will be the current song title (default template `{song}`) or whatever you set in **Prompt Template** (e.g. `{song} by {artist}`).
 
 The **Prompts** box in Scope’s UI may keep showing old text (e.g. “blooming flowers”); Scope often doesn’t update that field from the preprocessor. The song title is still sent to the pipeline internally. Check the **generated image** (it should follow the current track) and the **server logs** (see below) to confirm the plugin is working.
@@ -133,9 +133,9 @@ If you never see `Spotify preprocessor: __call__ invoked`, the preprocessor is n
 
 ## If something doesn’t work
 
-- **`ModuleNotFoundError: No module named 'spotipy'`:** You ran the auth script before installing dependencies. From the plugin repo root run `python3 -m pip install .`, then run `python3 scripts/spotify_auth.py` again. See Step 4, item 3 (install dependencies).
-- **Plugin not installed:** Make sure you added the plugin URL in Scope (Step 2) and that Scope finished installing it.
-- **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 4 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 3) are set there too.
+- **`ModuleNotFoundError: No module named 'spotipy'`:** You ran the auth script before installing dependencies. From the plugin repo root run `python3 -m pip install .`, then run `python3 scripts/spotify_auth.py` again. See Step 3, item 3 (install dependencies).
+- **Plugin not installed:** Make sure you added the plugin URL in Scope (Step 4) and that Scope finished installing it.
+- **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 3 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 2) are set there too.
 - **RunPod: “python: command not found”:** Use `python3` instead of `python` (e.g. `python3 scripts/spotify_auth.py`).
 
 ### Preprocessor in chain but never runs
