@@ -12,6 +12,27 @@ import urllib.request
 
 logger = logging.getLogger(__name__)
 
+# Common English stopwords (lowercase) for keyword-only mode. Keeps nouns/verbs/evocative words.
+LYRICS_STOPWORDS = frozenset(
+    "a an the and or but if then else when at by for with about against between into through "
+    "during before after above below to from up down in out on off over under again further "
+    "once here there when where why how all each every both few more most other some such "
+    "no nor not only own same so than too very just can will shall should could would may "
+    "might must need dare ought used i me my myself we our ours you your yours he him his "
+    "she her hers it its they them their theirs what which who whom this that these those "
+    "am is are was were be been being have has had do does did doing will would could "
+    "should may might must ought to of".split()
+)
+
+
+def lyrics_to_keywords(line: str, min_word_len: int = 2) -> str:
+    """Reduce a lyric line to keyword-like words by stripping stopwords. Keeps words >= min_word_len."""
+    if not line or not line.strip():
+        return ""
+    words = re.findall(r"[a-zA-Z']+", line)
+    kept = [w for w in words if len(w) >= min_word_len and w.lower() not in LYRICS_STOPWORDS]
+    return " ".join(kept).strip() if kept else line.strip()
+
 # LRCLIB: synced lyrics; requires track_name, artist_name, album_name, duration (seconds)
 LRCLIB_GET = "https://lrclib.net/api/get"
 # Lyrics.ovh: plain lyrics; artist + title in path

@@ -92,11 +92,55 @@ class SpotifyConfig(BasePipelineConfig):
         ),
     )
 
+    lyrics_keywords_only: bool = Field(
+        default=False,
+        description="When on, reduce each lyric line to keyword-like words (strip common words) for stronger visual prompts.",
+        json_schema_extra=ui_field_config(
+            order=24,
+            label="Lyrics as keywords only",
+            category="configuration",
+        ),
+    )
+
+    lyrics_rotating_style: bool = Field(
+        default=False,
+        description="When on, append a rotating style word (e.g. cinematic, dreamy) so prompts vary more between lines or over time.",
+        json_schema_extra=ui_field_config(
+            order=25,
+            label="Rotating style word",
+            category="configuration",
+        ),
+    )
+
+    lyrics_style_rotation_seconds: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=30.0,
+        description="When Rotating style word is on: 0 = advance style when lyric line changes; >0 = advance style every N seconds so the prompt changes more often.",
+        json_schema_extra=ui_field_config(
+            order=26,
+            label="Style rotation interval (sec)",
+            category="configuration",
+        ),
+    )
+
+    lyrics_preview_seconds: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=10.0,
+        description="When >0, show the next lyric line this many seconds early so the visual transitions sooner.",
+        json_schema_extra=ui_field_config(
+            order=27,
+            label="Preview next line (sec)",
+            category="configuration",
+        ),
+    )
+
     fallback_prompt: str = Field(
         default="Abstract flowing colors and shapes",
         description="Prompt when no track is playing",
         json_schema_extra=ui_field_config(
-            order=24,
+            order=28,
             label="Fallback Prompt",
             category="configuration",
         ),

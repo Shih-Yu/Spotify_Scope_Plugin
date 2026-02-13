@@ -167,9 +167,14 @@ In Scope’s Input/Settings when the Spotify preprocessor is selected you can se
 
 - **Template theme** — Dropdown of preset styles: **Dreamy / abstract**, **Lyrics + style** (song/artist), **Music video still**, **Minimal** (lyrics only), **Song + artist**, or **Custom** (use your own template below).
 - **Prompt Template** — Used **only when** Template theme is **Custom**. When you pick a preset theme (e.g. Dreamy / abstract), this field is ignored and the preset’s template is used. When you pick **Custom**, type your template here using `{song}`, `{artist}`, and when lyrics are on, `{lyrics}` (e.g. `{song} by {artist}` or `{lyrics}, style of {artist}`).
+- **Use lyrics** / **Synced with song** / **Lyrics max length** — Control whether lyrics are included and whether they’re time-synced (LRCLIB) or plain (Lyrics.ovh).
+- **Lyrics as keywords only** — When on, each line is reduced to keyword-like words (common words stripped) for stronger visual prompts.
+- **Rotating style word** — When on, a rotating style (e.g. cinematic, dreamy, noir, vivid) is appended so prompts vary more.
+- **Style rotation interval (sec)** — With Rotating style: 0 = advance on line change; > 0 = advance every N seconds so the prompt changes more often.
+- **Preview next line (sec)** — When > 0, the next lyric line is shown that many seconds early so the visual transitions sooner.
 - **Fallback Prompt** — Used when no track is playing (default: “Abstract flowing colors and shapes”).
 
-You can also set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_PROMPT_TEMPLATE`, and `SPOTIFY_FALLBACK_PROMPT` in the environment if you prefer.
+You can also set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_PROMPT_TEMPLATE`, `SPOTIFY_FALLBACK_PROMPT`, and the lyrics options (see “Make lyrics affect the visuals more” below) in the environment if you prefer.
 
 ### Template theme presets (how each is constructed)
 
@@ -208,6 +213,17 @@ You can drive the prompt from the **current lyric line** so the image changes wi
 3. Set **Prompt Template** to something like `{lyrics}` or `{song}: {lyrics}` so the prompt updates as the track plays.
 
 If synced lyrics aren’t found for a track, or you turn **Synced with song** off, the plugin falls back to plain lyrics from Lyrics.ovh (a short snippet up to **Lyrics max length** characters). No Genius or other API keys are required for synced or plain lyrics.
+
+### Make lyrics affect the visuals more (keywords, style rotation, preview)
+
+To get **stronger or more frequent** visual changes from lyrics:
+
+- **Lyrics as keywords only** — Reduces each line to keyword-like words (strips common words like “the”, “and”, “I”). The prompt becomes shorter and more visual (e.g. “heart break run night” instead of a full sentence), so the image model can react more distinctly.
+- **Rotating style word** — Appends a rotating style word (e.g. cinematic, dreamy, noir, vivid, surreal) to the lyric line. Each line (or each time interval) gets a different style so the same lyric doesn’t always produce the same look.
+- **Style rotation interval (sec)** — When **Rotating style word** is on: **0** = advance the style only when the lyric line changes; **> 0** (e.g. 3) = advance the style every N seconds of playback so the prompt changes more often even if the line hasn’t changed.
+- **Preview next line (sec)** — When **> 0** (e.g. 2), the plugin shows the *next* lyric line this many seconds early, so the image starts transitioning to the next line before it’s sung.
+
+Env vars (optional): `SPOTIFY_LYRICS_KEYWORDS_ONLY`, `SPOTIFY_LYRICS_ROTATING_STYLE`, `SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS`, `SPOTIFY_LYRICS_PREVIEW_SECONDS`.
 
 ---
 
