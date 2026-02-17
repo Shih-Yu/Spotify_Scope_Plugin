@@ -68,6 +68,9 @@ class SpotifyPipeline(Pipeline):
         self._spotify_credentials: Optional[tuple] = None
         # Cache synced lyrics per track so we don't refetch every frame
         self._synced_cache: Optional[tuple[str, int, list]] = None  # (track_id, duration_ms, lines)
+        # Cache plain lyrics (when use_synced is False) to avoid fetching every frame
+        self._plain_lyrics_cache: Optional[tuple[str, float, str]] = None  # (track_id, monotonic_time, text)
+        self._plain_lyrics_ttl: float = 2.0  # seconds
         self._last_logged_prompt: Optional[str] = None  # log prompt only when it changes
         # Rotating style: advance when line changes (if rotation_seconds==0) or by time
         self._style_index: int = 0
@@ -76,9 +79,67 @@ class SpotifyPipeline(Pipeline):
         self._fps_invocation_count: int = 0
         self._fps_last_log_time: float = 0.0
         self._last_call_time: Optional[float] = None
+        # Per-section timing (ms) to diagnose FPS drop when using plugin; accumulated and logged every ~5s
+        self._time_get_track_sum: float = 0.0
+        self._time_lyrics_sum: float = 0.0
+        self._time_passthrough_sum: float = 0.0
+        self._time_count: int = 0
+        # Log settings only when they change (avoid per-frame log spam)
+        self._last_logged_theme: Optional[str] = None
+        self._last_logged_lyrics_settings: Optional[tuple] = None  # (use_lyrics, use_synced)
+        self._last_logged_lyric_line: Optional[str] = None
+        # Cache resolved config from kwargs so we don't re-read 15+ dict/env lookups every frame
+        self._last_kwargs_id: Optional[int] = None
+        self._cached_config: Optional[dict] = None
 
     def prepare(self, **kwargs) -> Requirements:
         return Requirements(input_size=1)
+
+    def _get_config(self, kwargs: dict) -> dict:
+        """Resolve theme, template, and lyrics options from kwargs/env. Cached per kwargs identity to avoid 15+ lookups every frame."""
+        kid = id(kwargs)
+        if self._last_kwargs_id == kid and self._cached_config is not None:
+            return self._cached_config
+        self._last_kwargs_id = kid
+        theme = kwargs.get("template_theme") or kwargs.get("templateTheme") or os.environ.get("SPOTIFY_TEMPLATE_THEME", "dreamy_abstract")
+        custom = kwargs.get("prompt_template") or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "{lyrics}")
+        if theme == "custom" or theme not in PROMPT_TEMPLATE_PRESETS:
+            prompt_template = custom
+        else:
+            prompt_template = PROMPT_TEMPLATE_PRESETS[theme]
+        fallback = kwargs.get("fallback_prompt") or os.environ.get("SPOTIFY_FALLBACK_PROMPT", "Abstract flowing colors and shapes")
+        use_lyrics = kwargs.get("use_lyrics", kwargs.get("useLyrics"))
+        if use_lyrics is None:
+            use_lyrics = os.environ.get("SPOTIFY_USE_LYRICS", "1").lower() in ("1", "true", "yes")
+        use_synced = kwargs.get("use_synced_lyrics", kwargs.get("useSyncedLyrics"))
+        if use_synced is None:
+            use_synced = os.environ.get("SPOTIFY_USE_SYNCED_LYRICS", "1").lower() in ("1", "true", "yes")
+        lyrics_max = int(kwargs.get("lyrics_max_chars", kwargs.get("lyricsMaxChars", 300)) or 0)
+        keywords_only = kwargs.get("lyrics_keywords_only", kwargs.get("lyricsKeywordsOnly"))
+        if keywords_only is None:
+            keywords_only = os.environ.get("SPOTIFY_LYRICS_KEYWORDS_ONLY", "").lower() in ("1", "true", "yes")
+        rotating_style = kwargs.get("lyrics_rotating_style", kwargs.get("lyricsRotatingStyle"))
+        if rotating_style is None:
+            rotating_style = os.environ.get("SPOTIFY_LYRICS_ROTATING_STYLE", "").lower() in ("1", "true", "yes")
+        style_rotation_sec = float(kwargs.get("lyrics_style_rotation_seconds", kwargs.get("lyricsStyleRotationSeconds")) or 0)
+        if style_rotation_sec <= 0:
+            style_rotation_sec = float(os.environ.get("SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS", "0") or 0)
+        preview_sec = float(kwargs.get("lyrics_preview_seconds", kwargs.get("lyricsPreviewSeconds")) or 0)
+        if preview_sec <= 0:
+            preview_sec = float(os.environ.get("SPOTIFY_LYRICS_PREVIEW_SECONDS", "0") or 0)
+        self._cached_config = {
+            "theme": theme,
+            "prompt_template": prompt_template,
+            "fallback_prompt": fallback,
+            "use_lyrics": use_lyrics,
+            "use_synced": use_synced,
+            "lyrics_max": lyrics_max,
+            "keywords_only": keywords_only,
+            "rotating_style": rotating_style,
+            "style_rotation_sec": style_rotation_sec,
+            "preview_sec": preview_sec,
+        }
+        return self._cached_config
 
     def _get_spotify_client(self, kwargs: dict) -> SpotifyClient:
         # Credentials and redirect URI come from environment (e.g. RunPod pod env at setup).
@@ -107,74 +168,69 @@ class SpotifyPipeline(Pipeline):
         elif now - self._fps_last_log_time >= 5.0:
             elapsed = now - self._fps_last_log_time
             fps = self._fps_invocation_count / elapsed
+            n = max(1, self._time_count)
+            avg_get_track = self._time_get_track_sum / n
+            avg_lyrics = self._time_lyrics_sum / n
+            avg_passthrough = self._time_passthrough_sum / n
             msg = (
                 "Spotify preprocessor: pipeline FPS ≈ %.1f (preprocessor invoked %d times in %.1fs). "
-                "Low FPS is from the image pipeline (Stream Diffusion steps/resolution), not this plugin. "
-                "Tune Scope/Stream Diffusion settings (e.g. fewer steps, lower resolution) for higher FPS."
-            ) % (fps, self._fps_invocation_count, elapsed)
+                "Avg ms per frame: get_track=%.1f lyrics=%.1f passthrough=%.1f — use these to find what reduces FPS."
+            ) % (fps, self._fps_invocation_count, elapsed, avg_get_track, avg_lyrics, avg_passthrough)
             logger.warning(msg)
-            # Print to stdout so RunPod (and any environment that only captures stdout) always shows FPS
             print(msg, flush=True)
             self._fps_invocation_count = 0
             self._fps_last_log_time = now
+            self._time_get_track_sum = 0.0
+            self._time_lyrics_sum = 0.0
+            self._time_passthrough_sum = 0.0
+            self._time_count = 0
 
-        template_theme = kwargs.get("template_theme") or kwargs.get("templateTheme") or os.environ.get("SPOTIFY_TEMPLATE_THEME", "dreamy_abstract")
-        custom_template = (
-            kwargs.get("prompt_template")
-            or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "{lyrics}")
-        )
-        if template_theme == "custom" or template_theme not in PROMPT_TEMPLATE_PRESETS:
-            prompt_template = custom_template
-            logger.warning("Spotify preprocessor: template_theme=custom, using Prompt Template from settings")
-        else:
-            prompt_template = PROMPT_TEMPLATE_PRESETS[template_theme]
-            logger.warning("Spotify preprocessor: template_theme=%s", template_theme)
-        fallback_prompt = (
-            kwargs.get("fallback_prompt")
-            or os.environ.get("SPOTIFY_FALLBACK_PROMPT", "Abstract flowing colors and shapes")
-        )
+        cfg = self._get_config(kwargs)
+        template_theme = cfg["theme"]
+        prompt_template = cfg["prompt_template"]
+        fallback_prompt = cfg["fallback_prompt"]
+        if self._last_logged_theme != template_theme:
+            self._last_logged_theme = template_theme
+            if template_theme == "custom":
+                logger.warning("Spotify preprocessor: template_theme=custom, using Prompt Template from settings")
+            else:
+                logger.warning("Spotify preprocessor: template_theme=%s", template_theme)
 
+        t0_get = time.perf_counter()
         try:
             client = self._get_spotify_client(kwargs)
             track = client.get_current_track()
         except Exception as e:
             logger.warning("Spotify get_current_track failed: %s", e)
             track = None
+        t_get_track_ms = (time.perf_counter() - t0_get) * 1000
 
+        t0_lyrics = time.perf_counter()
         if track is None or not track.is_playing:
             prompt = fallback_prompt
             self._synced_cache = None
-            logger.warning(
-                "Spotify preprocessor: no track playing or API failed. Using fallback. "
-                "Check SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and token at ~/.scope-spotify/.spotify_token_cache"
-            )
+            self._plain_lyrics_cache = None
+            if self._last_logged_lyric_line != "_fallback_":
+                self._last_logged_lyric_line = "_fallback_"
+                logger.warning(
+                    "Spotify preprocessor: no track playing or API failed. Using fallback. "
+                    "Check SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and token at ~/.scope-spotify/.spotify_token_cache"
+                )
         else:
             lyrics = ""
-            # Scope may pass snake_case (schema) or camelCase (frontend); env fallback if UI doesn't pass
-            use_lyrics = kwargs.get("use_lyrics", kwargs.get("useLyrics"))
-            if use_lyrics is None:
-                use_lyrics = os.environ.get("SPOTIFY_USE_LYRICS", "1").lower() in ("1", "true", "yes")
-            use_synced = kwargs.get("use_synced_lyrics", kwargs.get("useSyncedLyrics"))
-            if use_synced is None:
-                use_synced = os.environ.get("SPOTIFY_USE_SYNCED_LYRICS", "1").lower() in ("1", "true", "yes")
-            lyrics_max = int(kwargs.get("lyrics_max_chars", kwargs.get("lyricsMaxChars", 300)) or 0)
-            keywords_only = kwargs.get("lyrics_keywords_only", kwargs.get("lyricsKeywordsOnly"))
-            if keywords_only is None:
-                keywords_only = os.environ.get("SPOTIFY_LYRICS_KEYWORDS_ONLY", "").lower() in ("1", "true", "yes")
-            rotating_style = kwargs.get("lyrics_rotating_style", kwargs.get("lyricsRotatingStyle"))
-            if rotating_style is None:
-                rotating_style = os.environ.get("SPOTIFY_LYRICS_ROTATING_STYLE", "").lower() in ("1", "true", "yes")
-            style_rotation_sec = float(kwargs.get("lyrics_style_rotation_seconds", kwargs.get("lyricsStyleRotationSeconds")) or 0)
-            if style_rotation_sec <= 0:
-                style_rotation_sec = float(os.environ.get("SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS", "0") or 0)
-            preview_sec = float(kwargs.get("lyrics_preview_seconds", kwargs.get("lyricsPreviewSeconds")) or 0)
-            if preview_sec <= 0:
-                preview_sec = float(os.environ.get("SPOTIFY_LYRICS_PREVIEW_SECONDS", "0") or 0)
-            # WARNING so it shows when Scope log level is WARNING (INFO often filtered)
-            logger.warning(
-                "Spotify preprocessor: use_lyrics=%s, use_synced_lyrics=%s",
-                use_lyrics, use_synced,
-            )
+            use_lyrics = cfg["use_lyrics"]
+            use_synced = cfg["use_synced"]
+            lyrics_max = cfg["lyrics_max"]
+            keywords_only = cfg["keywords_only"]
+            rotating_style = cfg["rotating_style"]
+            style_rotation_sec = cfg["style_rotation_sec"]
+            preview_sec = cfg["preview_sec"]
+            if self._last_logged_lyrics_settings != (use_lyrics, use_synced):
+                self._last_logged_lyrics_settings = (use_lyrics, use_synced)
+                logger.warning(
+                    "Spotify preprocessor: use_lyrics=%s, use_synced_lyrics=%s",
+                    use_lyrics, use_synced,
+                )
 
             if use_lyrics:
                 if use_synced:
@@ -210,15 +266,26 @@ class SpotifyPipeline(Pipeline):
                     # Keywords-only: strip stopwords for stronger visual prompts
                     if keywords_only and lyrics:
                         lyrics = lyrics_to_keywords(lyrics) or lyrics
-                    # Log current line so you can verify sync in server logs (line changes as song plays)
-                    if lyrics:
+                    # Log current line only when it changes (avoid per-frame log spam that hurts FPS)
+                    if lyrics and self._last_logged_lyric_line != lyrics:
+                        self._last_logged_lyric_line = lyrics
                         sec = track.progress_ms // 1000
                         logger.warning(
                             "Spotify preprocessor: synced lyric @ %d:%02d — %s",
                             sec // 60, sec % 60, lyrics[:80] + ("..." if len(lyrics) > 80 else ""),
                         )
                 else:
-                    lyrics = fetch_plain_lyrics(track.artist, track.name, lyrics_max or 500)
+                    # Plain lyrics: cache by track to avoid request every frame (large FPS impact)
+                    now_plain = time.monotonic()
+                    if (
+                        self._plain_lyrics_cache is not None
+                        and self._plain_lyrics_cache[0] == track.track_id
+                        and (now_plain - self._plain_lyrics_cache[1]) < self._plain_lyrics_ttl
+                    ):
+                        lyrics = self._plain_lyrics_cache[2]
+                    else:
+                        lyrics = fetch_plain_lyrics(track.artist, track.name, lyrics_max or 500)
+                        self._plain_lyrics_cache = (track.track_id, now_plain, lyrics)
                     if keywords_only and lyrics:
                         lyrics = lyrics_to_keywords(lyrics) or lyrics
                     if rotating_style and LYRICS_STYLE_WORDS:
@@ -231,7 +298,8 @@ class SpotifyPipeline(Pipeline):
                 prompt = prompt_template.format(**format_kw)
             except KeyError:
                 prompt = f"{track.name} by {track.artist}" + (f": {lyrics}" if lyrics else "")
-            logger.warning("Spotify preprocessor: prompt from track: %s by %s", track.name, track.artist)
+
+        t_lyrics_ms = (time.perf_counter() - t0_lyrics) * 1000
 
         # Log the actual prompt when it changes so you can see what's driving the image
         if prompt != getattr(self, "_last_logged_prompt", None):
@@ -239,14 +307,24 @@ class SpotifyPipeline(Pipeline):
             snippet = (prompt[:120] + "…") if len(prompt) > 120 else prompt
             logger.warning("Spotify preprocessor: prompt sent to pipeline: %s", snippet or "(empty)")
 
-        return self._passthrough(kwargs, prompt)
+        t0_passthrough = time.perf_counter()
+        out = self._passthrough(kwargs, prompt)
+        t_passthrough_ms = (time.perf_counter() - t0_passthrough) * 1000
+        self._time_get_track_sum += t_get_track_ms
+        self._time_lyrics_sum += t_lyrics_ms
+        self._time_passthrough_sum += t_passthrough_ms
+        self._time_count += 1
+        return out
 
     def _passthrough(self, kwargs: dict, prompt: str) -> dict:
         video = kwargs.get("video")
         if video is not None and len(video) > 0:
             frames = torch.stack([f.squeeze(0) for f in video], dim=0)
-            frames = frames.to(device=self.device, dtype=torch.float32) / 255.0
+            # Only copy to device if needed (avoids redundant CPU→GPU when already on device)
+            if frames.device != self.device or frames.dtype != torch.float32:
+                frames = frames.to(device=self.device, dtype=torch.float32)
+            frames = frames / 255.0
+            frames.clamp_(0, 1)  # in-place to avoid extra tensor allocation
         else:
             frames = torch.zeros(1, 512, 512, 3, device=self.device)
-        # Pass both keys: some Scope pipelines/UI use "prompt", others "prompts"
-        return {"video": frames.clamp(0, 1), "prompt": prompt, "prompts": prompt}
+        return {"video": frames, "prompt": prompt, "prompts": prompt}

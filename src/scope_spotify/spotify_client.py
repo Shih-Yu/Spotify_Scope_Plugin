@@ -5,9 +5,10 @@ Uses the spotipy package (pip install spotipy), imported as spotify in code.
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import spotipy as spotify
 from spotipy.oauth2 import SpotifyOAuth
@@ -76,7 +77,13 @@ class SpotifyClient:
         self._spotify: Optional[spotify.Spotify] = None
         self._last_track_id: Optional[str] = None
         self._auth_manager: Optional[SpotifyOAuth] = None
-        
+        # Cache current track to avoid calling Spotify API every frame (large FPS impact)
+        self._track_cache: Optional[Tuple[float, Optional["TrackInfo"]]] = None  # (monotonic_time, track)
+        try:
+            self._track_cache_ttl = float(os.environ.get("SPOTIFY_TRACK_CACHE_SECONDS", "0.4"))
+        except (TypeError, ValueError):
+            self._track_cache_ttl = 0.4
+
         # Set up cache path
         if cache_path:
             self.cache_path = Path(cache_path)
@@ -212,20 +219,22 @@ class SpotifyClient:
     
     def get_current_track(self) -> Optional[TrackInfo]:
         """Get information about the currently playing track.
-        
-        Returns:
-            TrackInfo if a track is playing, None otherwise.
+        Results are cached for SPOTIFY_TRACK_CACHE_SECONDS (default 0.4s) to avoid
+        calling the API every frame, which would severely reduce FPS.
         """
+        now = time.monotonic()
+        if self._track_cache is not None and (now - self._track_cache[0]) < self._track_cache_ttl:
+            return self._track_cache[1]
         try:
             sp = self._ensure_authenticated()
             current = sp.current_user_playing_track()
-            
+
             if current is None or current.get("item") is None:
                 logger.debug("No track currently playing")
+                self._track_cache = (now, None)
                 return None
-            
+
             track = current["item"]
-            # We only need name and artist for the prompt; skip artist/genres API (often 403)
             track_info = TrackInfo(
                 track_id=track["id"],
                 name=track["name"],
@@ -236,19 +245,21 @@ class SpotifyClient:
                 is_playing=current.get("is_playing", False),
                 genres=[],
             )
-            
-            # Log when track changes
+            self._track_cache = (now, track_info)
+
             if track_info.track_id != self._last_track_id:
-                logger.info(f"Now playing: {track_info.name} by {track_info.artist}")
+                logger.info("Now playing: %s by %s", track_info.name, track_info.artist)
                 self._last_track_id = track_info.track_id
-            
+
             return track_info
-            
+
         except spotify.SpotifyException as e:
-            logger.error(f"Spotify API error: {e}")
+            logger.error("Spotify API error: %s", e)
+            self._track_cache = (now, None)
             return None
         except Exception as e:
-            logger.error(f"Error getting current track: {e}")
+            logger.error("Error getting current track: %s", e)
+            self._track_cache = (now, None)
             return None
     
     def is_track_changed(self, track_info: Optional[TrackInfo]) -> bool:

@@ -126,7 +126,8 @@ The **container/Docker logs** (image pull, “create container”, “start cont
 2. **Look for these lines** (they are logged at WARNING level so they are not filtered out):
    - `Spotify preprocessor: template_theme=...` — shows which theme is active (`dreamy_abstract`, `lyrics_style`, `custom`, etc.).
    - `Spotify preprocessor: prompt sent to pipeline: ...` — shows the first ~120 characters of the prompt sent to the image pipeline. That is the prompt built from your template + current song/lyrics.
-   - **`Spotify preprocessor: pipeline FPS ≈ X.X`** — logged about every 5 seconds. This is the rate at which the preprocessor is invoked (one call per frame), so it matches the **output FPS** of the image pipeline. Use this in RunPod logs to see actual FPS and to confirm that low FPS is from the image pipeline (e.g. Stream Diffusion), not this plugin.
+   - **`Spotify preprocessor: pipeline FPS ≈ X.X`** — logged about every 5 seconds. This is the rate at which the preprocessor is invoked (one call per frame), so it matches the **output FPS** of the image pipeline.
+   - **`Avg ms per frame: get_track=... lyrics=... passthrough=...`** — appears in the same 5-second summary. Use these numbers to see which part of the plugin is costing time: **get_track** (Spotify API, cached by default), **lyrics** (synced or plain lyrics fetch), **passthrough** (tensor copy to device). If one of these is high (e.g. get_track > 50 ms), that step is reducing your FPS.
 
 If you never see `Spotify preprocessor: __call__ invoked`, the preprocessor is not being called (e.g. no video/camera input).
 
@@ -136,12 +137,23 @@ If you never see `Spotify preprocessor: __call__ invoked`, the preprocessor is n
 
 - **`ModuleNotFoundError: No module named 'spotipy'`:** You ran the auth script before installing dependencies. From the plugin repo root run `python3 -m pip install .`, then run `python3 scripts/spotify_auth.py` again. See Step 3, item 3 (install dependencies).
 - **Plugin not installed:** Make sure you added the plugin URL in Scope (Step 4) and that Scope finished installing it.
+- **“Unknown error” when installing the plugin from Scope’s UI:** Scope often doesn’t show the real error. To see the actual cause:
+  1. On the **same machine (or RunPod) where Scope runs**, open a terminal and use the **same Python environment** Scope uses (e.g. the pod’s `python3` or the venv Scope was started with).
+  2. Run:  
+     `pip install "git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git"`  
+     (or `python3 -m pip install "git+https://github.com/Shih-Yu/Spotify_Scope_Plugin.git"`).
+  3. Check the output for the real error. Common causes: **network** (can’t reach GitHub), **dependency conflict** (e.g. `spotipy` or `torch`), or **Python version** (Scope expects Python 3.12+). Fix the reported error, then try installing again from Scope’s UI, or leave the plugin installed via pip and restart Scope.
 - **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 3 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 2) are set there too.
 - **RunPod: “python: command not found”:** Use `python3` instead of `python` (e.g. `python3 scripts/spotify_auth.py`).
 
 ### Low FPS (e.g. ~4 FPS on H100 / RunPod when you expect 15–20)
 
 The Spotify plugin only supplies the **prompt**; it does not run the image model. FPS is determined by the **image pipeline** (e.g. Stream Diffusion): number of diffusion steps, resolution, and pipeline settings. So even on an H100 or other strong GPU, you may see ~4 FPS if the pipeline is configured for quality (many steps, high resolution). In RunPod logs, look for **`Spotify preprocessor: pipeline FPS ≈ X.X`** (logged every ~5 seconds) to see the actual frame rate. To get closer to 15–20 FPS, tune **Scope’s Stream Diffusion (or image pipeline) settings**: fewer inference steps, lower output resolution, and any “turbo” or speed-oriented mode the pipeline offers. The plugin cannot increase FPS; only the image pipeline can.
+
+**Output resolution has a large impact on throughput.** If your output resolution is set high (e.g. 1280×720), try dropping it to something lower like **832×480** or **640×382** in Scope’s pipeline settings to improve FPS. This is especially relevant when using video or camera input.
+
+**FPS drops when using the plugin (e.g. 14 FPS without plugin → 6 FPS with it)**  
+The plugin runs once per frame. To find what’s slowing you down, check the **avg ms per frame** line in the logs (get_track, lyrics, passthrough). The plugin now **caches** the current Spotify track for 0.4 seconds (configurable: `SPOTIFY_TRACK_CACHE_SECONDS`) and caches lyrics per track, so the API isn’t hit every frame. For **maximum FPS**, use **Template theme “Song + artist”** and turn **off “Use lyrics”** — then the plugin does minimal work (cached track + simple prompt). You can re-enable lyrics or a heavier theme once FPS is acceptable.
 
 ### Preprocessor in chain but never runs
 
