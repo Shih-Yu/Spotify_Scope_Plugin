@@ -6,14 +6,13 @@ from pydantic import Field
 
 from scope.core.pipelines.base_schema import BasePipelineConfig, ModeDefaults, UsageType, ui_field_config
 
-# Template theme preset keys (dropdown). "custom" = use prompt_template field.
+# Template theme preset keys (dropdown).
 TemplateTheme = Literal[
     "dreamy_abstract",
     "lyrics_style",
     "music_video",
     "minimal",
     "song_artist",
-    "custom",
 ]
 
 
@@ -38,36 +37,14 @@ class SpotifyConfig(BasePipelineConfig):
     supports_prompts = True
     modes = {"video": ModeDefaults(default=True), "text": ModeDefaults()}
 
-    # --- Prompt: preset theme (dropdown) or custom template ---
+    # --- Prompt: preset theme (dropdown) ---
 
     template_theme: TemplateTheme = Field(
         default="dreamy_abstract",
-        description="Preset theme for the prompt. Choose a style; use Custom to type your own template below.",
+        description="Preset theme for the prompt (Dreamy / abstract, Lyrics + style, Music video, Minimal, Song + artist).",
         json_schema_extra=ui_field_config(
             order=19,
             label="Template theme",
-            category="configuration",
-        ),
-    )
-
-    prompt_template: str = Field(
-        default="{lyrics}",
-        description="Prompt template (used when Template theme is Custom). Use {song}, {artist}, {lyrics}.",
-        json_schema_extra=ui_field_config(
-            order=20,
-            label="Prompt Template",
-            category="configuration",
-        ),
-    )
-
-    lyrics_max_chars: int = Field(
-        default=300,
-        ge=0,
-        le=2000,
-        description="Max characters for plain lyrics fallback (when synced lyrics are not found).",
-        json_schema_extra=ui_field_config(
-            order=21,
-            label="Lyrics max length",
             category="configuration",
         ),
     )
@@ -76,7 +53,7 @@ class SpotifyConfig(BasePipelineConfig):
         default=False,
         description="When on, reduce each lyric line to keyword-like words (strip common words) for stronger visual prompts.",
         json_schema_extra=ui_field_config(
-            order=22,
+            order=20,
             label="Lyrics as keywords only",
             category="configuration",
         ),
@@ -88,7 +65,7 @@ class SpotifyConfig(BasePipelineConfig):
         le=30.0,
         description="Style word rotation: 0 = advance when lyric line changes; >0 = advance every N seconds.",
         json_schema_extra=ui_field_config(
-            order=23,
+            order=21,
             label="Style rotation interval (sec)",
             category="configuration",
         ),
@@ -100,7 +77,7 @@ class SpotifyConfig(BasePipelineConfig):
         le=10.0,
         description="When >0, show the next lyric line this many seconds early so the visual transitions sooner.",
         json_schema_extra=ui_field_config(
-            order=24,
+            order=22,
             label="Preview next line (sec)",
             category="configuration",
         ),
@@ -110,7 +87,7 @@ class SpotifyConfig(BasePipelineConfig):
         default="Abstract flowing colors and shapes",
         description="Prompt when no track is playing",
         json_schema_extra=ui_field_config(
-            order=25,
+            order=23,
             label="Fallback Prompt",
             category="configuration",
         ),

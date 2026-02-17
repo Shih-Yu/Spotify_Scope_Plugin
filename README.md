@@ -114,7 +114,7 @@ The plugin needs a **one-time login** to your Spotify account on the machine whe
 3. **Enable video or camera input** — Scope only runs the preprocessor when it has frames. If you use text-only (no camera/video), the Spotify preprocessor is never called and the prompt will not be the song title.
 4. **Leave the Prompts box empty** so the preprocessor’s prompt (the song) is used.
 5. In Spotify (same account as in Step 3), **start playing a song**.
-6. In Scope, press **Play**. The prompt sent to the pipeline will be the current song title (default template `{song}`) or whatever you set in **Prompt Template** (e.g. `{song} by {artist}`).
+6. In Scope, press **Play**. The prompt is built from the current song and lyrics using the **Template theme** you chose (e.g. Dreamy / abstract, Song + artist).
 
 The **Prompts** box in Scope’s UI may keep showing old text (e.g. “blooming flowers”); Scope often doesn’t update that field from the preprocessor. The song title is still sent to the pipeline internally. Check the **generated image** (it should follow the current track) and the **server logs** (see below) to confirm the plugin is working.
 
@@ -124,7 +124,7 @@ The **container/Docker logs** (image pull, “create container”, “start cont
 
 1. **Find Scope’s process logs** — On RunPod, open the **Logs** for the pod (or the Scope service/container) and look for lines that come from the Scope app after it has started (e.g. when you press Play).
 2. **Look for these lines** (they are logged at WARNING level so they are not filtered out):
-   - `Spotify preprocessor: template_theme=...` — shows which theme is active (`dreamy_abstract`, `lyrics_style`, `custom`, etc.).
+   - `Spotify preprocessor: template_theme=...` — shows which theme is active (`dreamy_abstract`, `lyrics_style`, `song_artist`, etc.).
    - `Spotify preprocessor: prompt sent to pipeline: ...` — shows the first ~120 characters of the prompt sent to the image pipeline. That is the prompt built from your template + current song/lyrics.
    - **`Spotify preprocessor: pipeline FPS ≈ X.X`** — logged about every 5 seconds. This is the rate at which the preprocessor is invoked (one call per frame), so it matches the **output FPS** of the image pipeline.
    - **`Avg ms per frame: get_track=... lyrics=... passthrough=...`** — appears in the same 5-second summary. Use these numbers to see which part of the plugin is costing time: **get_track** (Spotify API, cached by default), **lyrics** (synced or plain lyrics fetch), **passthrough** (tensor copy to device). If one of these is high (e.g. get_track > 50 ms), that step is reducing your FPS.
@@ -178,21 +178,23 @@ Official docs: [Plugin development](https://docs.daydream.live/scope/guides/plug
 
 ---
 
-## Optional: change the prompt text
+## How the config works
 
-In Scope’s Input/Settings when the Spotify preprocessor is selected you can set:
+Credentials are **not** in the Scope UI. Set **SPOTIFY_CLIENT_ID**, **SPOTIFY_CLIENT_SECRET** (and optionally **SPOTIFY_REDIRECT_URI**) in the **environment** where Scope runs (e.g. RunPod pod env, or `.env`). See Step 2 in the main steps above.
 
-- **Template theme** — Dropdown of preset styles: **Dreamy / abstract**, **Lyrics + style** (song/artist), **Music video still**, **Minimal** (lyrics only), **Song + artist**, or **Custom** (use your own template below).
-- **Prompt Template** — Used **only when** Template theme is **Custom**. Type your template using `{song}`, `{artist}`, and `{lyrics}` (e.g. `{song} by {artist}` or `{lyrics}, style of {artist}`).
-- **Lyrics max length** — Max characters for fallback when synced lyrics aren’t found (rare).
-- **Lyrics as keywords only** — When on, each line is reduced to keyword-like words for stronger visual prompts.
-- **Style rotation interval (sec)** — Rotating style word (built-in): 0 = advance when lyric line changes; > 0 = advance every N seconds.
-- **Preview next line (sec)** — When > 0, the next lyric line is shown that many seconds early so the visual transitions sooner.
-- **Fallback Prompt** — Used when no track is playing (default: “Abstract flowing colors and shapes”).
+In Scope’s **Input/Settings** when the Spotify preprocessor is selected, you only see these options:
 
-**Built-in (no options):** The plugin always uses **time-synced lyrics** (LRCLIB) and a **rotating style word** (e.g. cinematic, dreamy, noir, vivid) so the prompt updates with the current line and varies in style.
+| Option | What it does |
+|--------|----------------|
+| **Template theme** | Chooses how the prompt is built. Dropdown: **Dreamy / abstract**, **Lyrics + style**, **Music video still**, **Minimal** (lyrics only), **Song + artist**. Each preset is a different combination of `{lyrics}`, `{song}`, and `{artist}` — see the table below. |
+| **Lyrics as keywords only** | **Off** (default): use the full lyric line. **On**: strip common words so the prompt is more keyword-like (e.g. “heart break run night”) for stronger visual cues. |
+| **Style rotation interval (sec)** | **0** (default): the rotating style word (cinematic, dreamy, noir, etc.) changes only when the lyric line changes. **> 0** (e.g. 3): the style word advances every N seconds so the look changes more often even on the same line. |
+| **Preview next line (sec)** | **0** (default): prompt uses the lyric line at the current playback position. **> 0** (e.g. 2): prompt uses the line that’s N seconds ahead so the image starts changing to the next line before it’s sung. |
+| **Fallback Prompt** | Text used when no track is playing (default: “Abstract flowing colors and shapes”). |
 
-You can also set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_PROMPT_TEMPLATE`, `SPOTIFY_FALLBACK_PROMPT`, and the lyrics options (see “Make lyrics affect the visuals more” below) in the environment if you prefer.
+**Built-in (no toggles):** The plugin always uses **time-synced lyrics** from **LRCLIB** and appends a **rotating style word** (cinematic, dreamy, noir, vivid, surreal, ethereal, dramatic, moody, luminous, atmospheric) so the prompt updates with the current line and varies in style. There are no options to turn lyrics or the style word off.
+
+**Environment overrides (optional):** You can set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_FALLBACK_PROMPT`, `SPOTIFY_LYRICS_KEYWORDS_ONLY`, `SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS`, `SPOTIFY_LYRICS_PREVIEW_SECONDS` in the environment instead of or in addition to the UI.
 
 ### Template theme presets (how each is constructed)
 
@@ -207,7 +209,6 @@ Each preset builds the prompt from placeholders: `{song}` = track title, `{artis
 | **Music video still** | `Music video frame: {lyrics}, "{song}" by {artist}, cinematic` | Yes |
 | **Minimal** | `{lyrics}` | Yes (only) |
 | **Song + artist** | `{song} by {artist}, vivid, cinematic` | No |
-| **Custom** | Whatever you set in **Prompt Template** | Your choice |
 
 #### Description (how each is built)
 
@@ -218,7 +219,6 @@ Each preset builds the prompt from placeholders: `{song}` = track title, `{artis
 | **Music video still** | Single frame that could be from a music video for the track. | `Music video frame: {lyrics}, "{song}" by {artist}, cinematic` — frames the prompt as a music-video shot, cinematic look. |
 | **Minimal** | Only the current lyric line; no song/artist in the prompt. | `{lyrics}` — prompt is just the lyric text (with rotating style word). |
 | **Song + artist** | Template omits lyrics; good for simple, recognizable imagery. (Lyrics are still fetched; only the template doesn’t use `{lyrics}`.) | `{song} by {artist}, vivid, cinematic` — title and artist plus “vivid, cinematic”. |
-| **Custom** | You type your own template in **Prompt Template** (see above). | Whatever you enter in the Prompt Template field, using `{song}`, `{artist}`, and optionally `{lyrics}`. |
 
 ### Lyrics (built-in)
 

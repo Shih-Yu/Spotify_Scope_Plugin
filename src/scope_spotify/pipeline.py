@@ -34,7 +34,7 @@ LYRICS_STYLE_WORDS = (
     "atmospheric",
 )
 
-# Preset templates: theme key -> template string. Used when template_theme != "custom".
+# Preset templates: theme key -> template string.
 PROMPT_TEMPLATE_PRESETS: dict[str, str] = {
     "dreamy_abstract": "{lyrics}, dreamlike, {song} by {artist}, soft lighting",
     "lyrics_style": "{lyrics}, inspired by {song} and {artist}, vivid",
@@ -97,13 +97,8 @@ class SpotifyPipeline(Pipeline):
             return self._cached_config
         self._last_kwargs_id = kid
         theme = kwargs.get("template_theme") or kwargs.get("templateTheme") or os.environ.get("SPOTIFY_TEMPLATE_THEME", "dreamy_abstract")
-        custom = kwargs.get("prompt_template") or os.environ.get("SPOTIFY_PROMPT_TEMPLATE", "{lyrics}")
-        if theme == "custom" or theme not in PROMPT_TEMPLATE_PRESETS:
-            prompt_template = custom
-        else:
-            prompt_template = PROMPT_TEMPLATE_PRESETS[theme]
+        prompt_template = PROMPT_TEMPLATE_PRESETS.get(theme) or PROMPT_TEMPLATE_PRESETS["dreamy_abstract"]
         fallback = kwargs.get("fallback_prompt") or os.environ.get("SPOTIFY_FALLBACK_PROMPT", "Abstract flowing colors and shapes")
-        lyrics_max = int(kwargs.get("lyrics_max_chars", kwargs.get("lyricsMaxChars", 300)) or 0)
         keywords_only = kwargs.get("lyrics_keywords_only", kwargs.get("lyricsKeywordsOnly"))
         if keywords_only is None:
             keywords_only = os.environ.get("SPOTIFY_LYRICS_KEYWORDS_ONLY", "").lower() in ("1", "true", "yes")
@@ -117,7 +112,6 @@ class SpotifyPipeline(Pipeline):
             "theme": theme,
             "prompt_template": prompt_template,
             "fallback_prompt": fallback,
-            "lyrics_max": lyrics_max,
             "keywords_only": keywords_only,
             "style_rotation_sec": style_rotation_sec,
             "preview_sec": preview_sec,
@@ -174,10 +168,7 @@ class SpotifyPipeline(Pipeline):
         fallback_prompt = cfg["fallback_prompt"]
         if self._last_logged_theme != template_theme:
             self._last_logged_theme = template_theme
-            if template_theme == "custom":
-                logger.warning("Spotify preprocessor: template_theme=custom, using Prompt Template from settings")
-            else:
-                logger.warning("Spotify preprocessor: template_theme=%s", template_theme)
+            logger.warning("Spotify preprocessor: template_theme=%s", template_theme)
 
         t0_get = time.perf_counter()
         try:
@@ -200,7 +191,6 @@ class SpotifyPipeline(Pipeline):
                 )
         else:
             lyrics = ""
-            lyrics_max = cfg["lyrics_max"]
             keywords_only = cfg["keywords_only"]
             style_rotation_sec = cfg["style_rotation_sec"]
             preview_sec = cfg["preview_sec"]
