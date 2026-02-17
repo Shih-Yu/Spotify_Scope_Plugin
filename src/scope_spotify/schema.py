@@ -60,33 +60,13 @@ class SpotifyConfig(BasePipelineConfig):
         ),
     )
 
-    use_lyrics: bool = Field(
-        default=True,
-        description="Add lyrics to the prompt. When on, use 'Synced with song' for time-synced lines (recommended) or plain lyrics.",
-        json_schema_extra=ui_field_config(
-            order=21,
-            label="Use lyrics",
-            category="configuration",
-        ),
-    )
-
-    use_synced_lyrics: bool = Field(
-        default=True,
-        description="When 'Use lyrics' is on: sync prompt with current lyric line (LRCLIB). Off = plain lyrics snippet (Lyrics.ovh).",
-        json_schema_extra=ui_field_config(
-            order=22,
-            label="Synced with song",
-            category="configuration",
-        ),
-    )
-
     lyrics_max_chars: int = Field(
         default=300,
         ge=0,
         le=2000,
-        description="Max characters when using plain lyrics (ignored when synced).",
+        description="Max characters for plain lyrics fallback (when synced lyrics are not found).",
         json_schema_extra=ui_field_config(
-            order=23,
+            order=21,
             label="Lyrics max length",
             category="configuration",
         ),
@@ -96,18 +76,8 @@ class SpotifyConfig(BasePipelineConfig):
         default=False,
         description="When on, reduce each lyric line to keyword-like words (strip common words) for stronger visual prompts.",
         json_schema_extra=ui_field_config(
-            order=24,
+            order=22,
             label="Lyrics as keywords only",
-            category="configuration",
-        ),
-    )
-
-    lyrics_rotating_style: bool = Field(
-        default=False,
-        description="When on, append a rotating style word (e.g. cinematic, dreamy) so prompts vary more between lines or over time.",
-        json_schema_extra=ui_field_config(
-            order=25,
-            label="Rotating style word",
             category="configuration",
         ),
     )
@@ -116,9 +86,9 @@ class SpotifyConfig(BasePipelineConfig):
         default=0.0,
         ge=0.0,
         le=30.0,
-        description="When Rotating style word is on: 0 = advance style when lyric line changes; >0 = advance style every N seconds so the prompt changes more often.",
+        description="Style word rotation: 0 = advance when lyric line changes; >0 = advance every N seconds.",
         json_schema_extra=ui_field_config(
-            order=26,
+            order=23,
             label="Style rotation interval (sec)",
             category="configuration",
         ),
@@ -130,7 +100,7 @@ class SpotifyConfig(BasePipelineConfig):
         le=10.0,
         description="When >0, show the next lyric line this many seconds early so the visual transitions sooner.",
         json_schema_extra=ui_field_config(
-            order=27,
+            order=24,
             label="Preview next line (sec)",
             category="configuration",
         ),
@@ -140,7 +110,7 @@ class SpotifyConfig(BasePipelineConfig):
         default="Abstract flowing colors and shapes",
         description="Prompt when no track is playing",
         json_schema_extra=ui_field_config(
-            order=28,
+            order=25,
             label="Fallback Prompt",
             category="configuration",
         ),

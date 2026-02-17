@@ -10,7 +10,6 @@ import torch
 from scope.core.pipelines.interface import Pipeline, Requirements
 
 from .lyrics_client import (
-    fetch_plain_lyrics,
     fetch_synced_lyrics,
     get_line_at_position,
     lyrics_to_keywords,
@@ -68,9 +67,6 @@ class SpotifyPipeline(Pipeline):
         self._spotify_credentials: Optional[tuple] = None
         # Cache synced lyrics per track so we don't refetch every frame
         self._synced_cache: Optional[tuple[str, int, list]] = None  # (track_id, duration_ms, lines)
-        # Cache plain lyrics (when use_synced is False) to avoid fetching every frame
-        self._plain_lyrics_cache: Optional[tuple[str, float, str]] = None  # (track_id, monotonic_time, text)
-        self._plain_lyrics_ttl: float = 2.0  # seconds
         self._last_logged_prompt: Optional[str] = None  # log prompt only when it changes
         # Rotating style: advance when line changes (if rotation_seconds==0) or by time
         self._style_index: int = 0
@@ -86,7 +82,6 @@ class SpotifyPipeline(Pipeline):
         self._time_count: int = 0
         # Log settings only when they change (avoid per-frame log spam)
         self._last_logged_theme: Optional[str] = None
-        self._last_logged_lyrics_settings: Optional[tuple] = None  # (use_lyrics, use_synced)
         self._last_logged_lyric_line: Optional[str] = None
         # Cache resolved config from kwargs so we don't re-read 15+ dict/env lookups every frame
         self._last_kwargs_id: Optional[int] = None
@@ -108,19 +103,10 @@ class SpotifyPipeline(Pipeline):
         else:
             prompt_template = PROMPT_TEMPLATE_PRESETS[theme]
         fallback = kwargs.get("fallback_prompt") or os.environ.get("SPOTIFY_FALLBACK_PROMPT", "Abstract flowing colors and shapes")
-        use_lyrics = kwargs.get("use_lyrics", kwargs.get("useLyrics"))
-        if use_lyrics is None:
-            use_lyrics = os.environ.get("SPOTIFY_USE_LYRICS", "1").lower() in ("1", "true", "yes")
-        use_synced = kwargs.get("use_synced_lyrics", kwargs.get("useSyncedLyrics"))
-        if use_synced is None:
-            use_synced = os.environ.get("SPOTIFY_USE_SYNCED_LYRICS", "1").lower() in ("1", "true", "yes")
         lyrics_max = int(kwargs.get("lyrics_max_chars", kwargs.get("lyricsMaxChars", 300)) or 0)
         keywords_only = kwargs.get("lyrics_keywords_only", kwargs.get("lyricsKeywordsOnly"))
         if keywords_only is None:
             keywords_only = os.environ.get("SPOTIFY_LYRICS_KEYWORDS_ONLY", "").lower() in ("1", "true", "yes")
-        rotating_style = kwargs.get("lyrics_rotating_style", kwargs.get("lyricsRotatingStyle"))
-        if rotating_style is None:
-            rotating_style = os.environ.get("SPOTIFY_LYRICS_ROTATING_STYLE", "").lower() in ("1", "true", "yes")
         style_rotation_sec = float(kwargs.get("lyrics_style_rotation_seconds", kwargs.get("lyricsStyleRotationSeconds")) or 0)
         if style_rotation_sec <= 0:
             style_rotation_sec = float(os.environ.get("SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS", "0") or 0)
@@ -131,11 +117,8 @@ class SpotifyPipeline(Pipeline):
             "theme": theme,
             "prompt_template": prompt_template,
             "fallback_prompt": fallback,
-            "use_lyrics": use_lyrics,
-            "use_synced": use_synced,
             "lyrics_max": lyrics_max,
             "keywords_only": keywords_only,
-            "rotating_style": rotating_style,
             "style_rotation_sec": style_rotation_sec,
             "preview_sec": preview_sec,
         }
@@ -209,7 +192,6 @@ class SpotifyPipeline(Pipeline):
         if track is None or not track.is_playing:
             prompt = fallback_prompt
             self._synced_cache = None
-            self._plain_lyrics_cache = None
             if self._last_logged_lyric_line != "_fallback_":
                 self._last_logged_lyric_line = "_fallback_"
                 logger.warning(
@@ -218,80 +200,47 @@ class SpotifyPipeline(Pipeline):
                 )
         else:
             lyrics = ""
-            use_lyrics = cfg["use_lyrics"]
-            use_synced = cfg["use_synced"]
             lyrics_max = cfg["lyrics_max"]
             keywords_only = cfg["keywords_only"]
-            rotating_style = cfg["rotating_style"]
             style_rotation_sec = cfg["style_rotation_sec"]
             preview_sec = cfg["preview_sec"]
-            if self._last_logged_lyrics_settings != (use_lyrics, use_synced):
-                self._last_logged_lyrics_settings = (use_lyrics, use_synced)
-                logger.warning(
-                    "Spotify preprocessor: use_lyrics=%s, use_synced_lyrics=%s",
-                    use_lyrics, use_synced,
+            # Built-in: always use time-synced lyrics (LRCLIB) and rotating style word
+            cache = self._synced_cache
+            if cache is None or cache[0] != track.track_id or cache[1] != track.duration_ms:
+                duration_sec = max(1, track.duration_ms // 1000)
+                lines = fetch_synced_lyrics(
+                    track.artist, track.name, track.album, duration_sec
                 )
-
-            if use_lyrics:
-                if use_synced:
-                    # Time-synced: current line from LRCLIB, cached per track
-                    cache = self._synced_cache
-                    if cache is None or cache[0] != track.track_id or cache[1] != track.duration_ms:
-                        duration_sec = max(1, track.duration_ms // 1000)
-                        lines = fetch_synced_lyrics(
-                            track.artist, track.name, track.album, duration_sec
-                        )
-                        self._synced_cache = (track.track_id, track.duration_ms, lines)
-                        self._last_style_line = None  # reset so first line of new track can advance style
-                        if not lines:
-                            logger.warning(
-                                "Spotify preprocessor: no synced lyrics found for %s by %s (LRCLIB). Using title only.",
-                                track.name, track.artist,
-                            )
-                    else:
-                        lines = cache[2]
-                    # Preview: use position N seconds ahead so next line appears earlier
-                    progress_ms = track.progress_ms + int(preview_sec * 1000)
-                    lyrics = get_line_at_position(lines, progress_ms)
-                    # Rotating style: advance by time (every N sec) or by line change
-                    if rotating_style and LYRICS_STYLE_WORDS:
-                        if style_rotation_sec > 0:
-                            self._style_index = int(progress_ms / 1000.0 / style_rotation_sec) % len(LYRICS_STYLE_WORDS)
-                        else:
-                            if self._last_style_line != lyrics:
-                                self._last_style_line = lyrics
-                                self._style_index = (self._style_index + 1) % len(LYRICS_STYLE_WORDS)
-                        style_word = LYRICS_STYLE_WORDS[self._style_index]
-                        lyrics = f"{lyrics}, {style_word}" if lyrics else style_word
-                    # Keywords-only: strip stopwords for stronger visual prompts
-                    if keywords_only and lyrics:
-                        lyrics = lyrics_to_keywords(lyrics) or lyrics
-                    # Log current line only when it changes (avoid per-frame log spam that hurts FPS)
-                    if lyrics and self._last_logged_lyric_line != lyrics:
-                        self._last_logged_lyric_line = lyrics
-                        sec = track.progress_ms // 1000
-                        logger.warning(
-                            "Spotify preprocessor: synced lyric @ %d:%02d — %s",
-                            sec // 60, sec % 60, lyrics[:80] + ("..." if len(lyrics) > 80 else ""),
-                        )
+                self._synced_cache = (track.track_id, track.duration_ms, lines)
+                self._last_style_line = None
+                if not lines:
+                    logger.warning(
+                        "Spotify preprocessor: no synced lyrics found for %s by %s (LRCLIB). Using title only.",
+                        track.name, track.artist,
+                    )
+            else:
+                lines = cache[2]
+            progress_ms = track.progress_ms + int(preview_sec * 1000)
+            lyrics = get_line_at_position(lines, progress_ms)
+            # Rotating style word (built-in): advance by time or by line change
+            if LYRICS_STYLE_WORDS:
+                if style_rotation_sec > 0:
+                    self._style_index = int(progress_ms / 1000.0 / style_rotation_sec) % len(LYRICS_STYLE_WORDS)
                 else:
-                    # Plain lyrics: cache by track to avoid request every frame (large FPS impact)
-                    now_plain = time.monotonic()
-                    if (
-                        self._plain_lyrics_cache is not None
-                        and self._plain_lyrics_cache[0] == track.track_id
-                        and (now_plain - self._plain_lyrics_cache[1]) < self._plain_lyrics_ttl
-                    ):
-                        lyrics = self._plain_lyrics_cache[2]
-                    else:
-                        lyrics = fetch_plain_lyrics(track.artist, track.name, lyrics_max or 500)
-                        self._plain_lyrics_cache = (track.track_id, now_plain, lyrics)
-                    if keywords_only and lyrics:
-                        lyrics = lyrics_to_keywords(lyrics) or lyrics
-                    if rotating_style and LYRICS_STYLE_WORDS:
+                    if self._last_style_line != lyrics:
+                        self._last_style_line = lyrics
                         self._style_index = (self._style_index + 1) % len(LYRICS_STYLE_WORDS)
-                        style_word = LYRICS_STYLE_WORDS[self._style_index]
-                        lyrics = f"{lyrics}, {style_word}" if lyrics else style_word
+                style_word = LYRICS_STYLE_WORDS[self._style_index]
+                lyrics = f"{lyrics}, {style_word}" if lyrics else style_word
+            if keywords_only and lyrics:
+                lyrics = lyrics_to_keywords(lyrics) or lyrics
+            if lyrics and self._last_logged_lyric_line != lyrics:
+                self._last_logged_lyric_line = lyrics
+                sec = track.progress_ms // 1000
+                logger.warning(
+                    "Spotify preprocessor: synced lyric @ %d:%02d — %s",
+                    sec // 60, sec % 60, lyrics[:80] + ("..." if len(lyrics) > 80 else ""),
+                )
 
             format_kw: dict = {"song": track.name, "artist": track.artist, "lyrics": lyrics}
             try:
