@@ -2,6 +2,7 @@
 
 import logging
 import os
+import time
 from typing import TYPE_CHECKING, Optional
 
 import torch
@@ -71,6 +72,10 @@ class SpotifyPipeline(Pipeline):
         # Rotating style: advance when line changes (if rotation_seconds==0) or by time
         self._style_index: int = 0
         self._last_style_line: Optional[str] = None
+        # FPS logging: preprocessor is invoked once per pipeline frame, so invocation rate = pipeline FPS
+        self._fps_invocation_count: int = 0
+        self._fps_last_log_time: float = 0.0
+        self._last_call_time: Optional[float] = None
 
     def prepare(self, **kwargs) -> Requirements:
         return Requirements(input_size=1)
@@ -93,7 +98,24 @@ class SpotifyPipeline(Pipeline):
         return self._spotify_client
 
     def __call__(self, **kwargs) -> dict:
-        logger.warning("Spotify preprocessor: __call__ invoked (if you see this, the plugin is running)")
+        now = time.perf_counter()
+        # Log pipeline FPS periodically (preprocessor invoked once per frame; rate = output FPS)
+        self._fps_invocation_count += 1
+        self._last_call_time = now
+        if self._fps_last_log_time == 0.0:
+            self._fps_last_log_time = now
+        elif now - self._fps_last_log_time >= 5.0:
+            elapsed = now - self._fps_last_log_time
+            fps = self._fps_invocation_count / elapsed
+            logger.warning(
+                "Spotify preprocessor: pipeline FPS ≈ %.1f (preprocessor invoked %d times in %.1fs). "
+                "Low FPS is from the image pipeline (Stream Diffusion steps/resolution), not this plugin. "
+                "Tune Scope/Stream Diffusion settings (e.g. fewer steps, lower resolution) for higher FPS.",
+                fps, self._fps_invocation_count, elapsed,
+            )
+            self._fps_invocation_count = 0
+            self._fps_last_log_time = now
+
         template_theme = kwargs.get("template_theme") or kwargs.get("templateTheme") or os.environ.get("SPOTIFY_TEMPLATE_THEME", "dreamy_abstract")
         custom_template = (
             kwargs.get("prompt_template")

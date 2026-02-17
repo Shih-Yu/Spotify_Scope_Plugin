@@ -126,6 +126,7 @@ The **container/Docker logs** (image pull, “create container”, “start cont
 2. **Look for these lines** (they are logged at WARNING level so they are not filtered out):
    - `Spotify preprocessor: template_theme=...` — shows which theme is active (`dreamy_abstract`, `lyrics_style`, `custom`, etc.).
    - `Spotify preprocessor: prompt sent to pipeline: ...` — shows the first ~120 characters of the prompt sent to the image pipeline. That is the prompt built from your template + current song/lyrics.
+   - **`Spotify preprocessor: pipeline FPS ≈ X.X`** — logged about every 5 seconds. This is the rate at which the preprocessor is invoked (one call per frame), so it matches the **output FPS** of the image pipeline. Use this in RunPod logs to see actual FPS and to confirm that low FPS is from the image pipeline (e.g. Stream Diffusion), not this plugin.
 
 If you never see `Spotify preprocessor: __call__ invoked`, the preprocessor is not being called (e.g. no video/camera input).
 
@@ -137,6 +138,10 @@ If you never see `Spotify preprocessor: __call__ invoked`, the preprocessor is n
 - **Plugin not installed:** Make sure you added the plugin URL in Scope (Step 4) and that Scope finished installing it.
 - **“Nothing happens” when I press Play:** Restart Scope (or the pod) after Step 3 so it can load the token. Check that you ran the auth script **on the same pod** where Scope runs and that credentials (Step 2) are set there too.
 - **RunPod: “python: command not found”:** Use `python3` instead of `python` (e.g. `python3 scripts/spotify_auth.py`).
+
+### Low FPS (e.g. ~4 FPS on H100 / RunPod when you expect 15–20)
+
+The Spotify plugin only supplies the **prompt**; it does not run the image model. FPS is determined by the **image pipeline** (e.g. Stream Diffusion): number of diffusion steps, resolution, and pipeline settings. So even on an H100 or other strong GPU, you may see ~4 FPS if the pipeline is configured for quality (many steps, high resolution). In RunPod logs, look for **`Spotify preprocessor: pipeline FPS ≈ X.X`** (logged every ~5 seconds) to see the actual frame rate. To get closer to 15–20 FPS, tune **Scope’s Stream Diffusion (or image pipeline) settings**: fewer inference steps, lower output resolution, and any “turbo” or speed-oriented mode the pipeline offers. The plugin cannot increase FPS; only the image pipeline can.
 
 ### Preprocessor in chain but never runs
 
