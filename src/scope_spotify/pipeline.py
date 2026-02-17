@@ -102,6 +102,9 @@ class SpotifyPipeline(Pipeline):
         keywords_only = kwargs.get("lyrics_keywords_only", kwargs.get("lyricsKeywordsOnly"))
         if keywords_only is None:
             keywords_only = os.environ.get("SPOTIFY_LYRICS_KEYWORDS_ONLY", "").lower() in ("1", "true", "yes")
+        rotating_style = kwargs.get("lyrics_rotating_style", kwargs.get("lyricsRotatingStyle"))
+        if rotating_style is None:
+            rotating_style = os.environ.get("SPOTIFY_LYRICS_ROTATING_STYLE", "true").lower() in ("1", "true", "yes")
         style_rotation_sec = float(kwargs.get("lyrics_style_rotation_seconds", kwargs.get("lyricsStyleRotationSeconds")) or 0)
         if style_rotation_sec <= 0:
             style_rotation_sec = float(os.environ.get("SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS", "0") or 0)
@@ -113,6 +116,7 @@ class SpotifyPipeline(Pipeline):
             "prompt_template": prompt_template,
             "fallback_prompt": fallback,
             "keywords_only": keywords_only,
+            "rotating_style": rotating_style,
             "style_rotation_sec": style_rotation_sec,
             "preview_sec": preview_sec,
         }
@@ -194,7 +198,7 @@ class SpotifyPipeline(Pipeline):
             keywords_only = cfg["keywords_only"]
             style_rotation_sec = cfg["style_rotation_sec"]
             preview_sec = cfg["preview_sec"]
-            # Built-in: always use time-synced lyrics (LRCLIB) and rotating style word
+            # Built-in: always use time-synced lyrics (LRCLIB). Rotating style word is optional (config).
             cache = self._synced_cache
             if cache is None or cache[0] != track.track_id or cache[1] != track.duration_ms:
                 duration_sec = max(1, track.duration_ms // 1000)
@@ -212,8 +216,8 @@ class SpotifyPipeline(Pipeline):
                 lines = cache[2]
             progress_ms = track.progress_ms + int(preview_sec * 1000)
             lyrics = get_line_at_position(lines, progress_ms)
-            # Rotating style word (built-in): advance by time or by line change
-            if LYRICS_STYLE_WORDS:
+            # Rotating style word (when on): advance by time or by line change
+            if cfg["rotating_style"] and LYRICS_STYLE_WORDS:
                 if style_rotation_sec > 0:
                     self._style_index = int(progress_ms / 1000.0 / style_rotation_sec) % len(LYRICS_STYLE_WORDS)
                 else:

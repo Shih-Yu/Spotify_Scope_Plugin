@@ -153,7 +153,7 @@ The Spotify plugin only supplies the **prompt**; it does not run the image model
 **Output resolution has a large impact on throughput.** If your output resolution is set high (e.g. 1280×720), try dropping it to something lower like **832×480** or **640×382** in Scope’s pipeline settings to improve FPS. This is especially relevant when using video or camera input.
 
 **FPS drops when using the plugin (e.g. 14 FPS without plugin → 6 FPS with it)**  
-The plugin runs once per frame. To find what’s slowing you down, check the **avg ms per frame** line in the logs (get_track, lyrics, passthrough). The plugin now **caches** the current Spotify track for 0.4 seconds (configurable: `SPOTIFY_TRACK_CACHE_SECONDS`) and caches lyrics per track, so the API isn’t hit every frame. Lyrics (time-synced) and rotating style word are **built-in**. For **maximum FPS**, use **Template theme “Song + artist”** so the prompt is shorter (song + artist only in the template); you can switch to a lyrics-heavy theme (e.g. Dreamy / abstract) when FPS is acceptable.
+The plugin runs once per frame. To find what’s slowing you down, check the **avg ms per frame** line in the logs (get_track, lyrics, passthrough). The plugin now **caches** the current Spotify track for 0.4 seconds (configurable: `SPOTIFY_TRACK_CACHE_SECONDS`) and caches lyrics per track, so the API isn’t hit every frame. Lyrics (time-synced) are **built-in**; rotating style word can be turned on or off. For **maximum FPS**, use **Template theme “Song + artist”** so the prompt is shorter (song + artist only in the template); you can switch to a lyrics-heavy theme (e.g. Dreamy / abstract) when FPS is acceptable.
 
 ### Preprocessor in chain but never runs
 
@@ -188,17 +188,20 @@ In Scope’s **Input/Settings** when the Spotify preprocessor is selected, you o
 |--------|----------------|
 | **Template theme** | Chooses how the prompt is built. Dropdown: **Dreamy / abstract**, **Lyrics + style**, **Music video still**, **Minimal** (lyrics only), **Song + artist**. Each preset is a different combination of `{lyrics}`, `{song}`, and `{artist}` — see the table below. |
 | **Lyrics as keywords only** | **Off** (default): use the full lyric line. **On**: strip common words so the prompt is more keyword-like (e.g. “heart break run night”) for stronger visual cues. |
-| **Style rotation interval (sec)** | **0** (default): the rotating style word (cinematic, dreamy, noir, etc.) changes only when the lyric line changes. **> 0** (e.g. 3): the style word advances every N seconds so the look changes more often even on the same line. |
+| **Rotating style word** | **On** (default): append a rotating style word (cinematic, dreamy, noir, vivid, etc.) so the prompt varies in style between lines or over time. **Off**: use only the lyric line (and song/artist from the template) with no style word. |
+| **Style rotation interval (sec)** | When **Rotating style word** is on: **0** (default) = style word changes when the lyric line changes. **> 0** (e.g. 3) = style word advances every N seconds so the look changes more often. Ignored when Rotating style word is off. |
 | **Preview next line (sec)** | **0** (default): prompt uses the lyric line at the current playback position. **> 0** (e.g. 2): prompt uses the line that’s N seconds ahead so the image starts changing to the next line before it’s sung. |
 | **Fallback Prompt** | Text used when no track is playing (default: “Abstract flowing colors and shapes”). |
 
-**Built-in (no toggles):** The plugin always uses **time-synced lyrics** from **LRCLIB** and appends a **rotating style word** (cinematic, dreamy, noir, vivid, surreal, ethereal, dramatic, moody, luminous, atmospheric) so the prompt updates with the current line and varies in style. There are no options to turn lyrics or the style word off.
+**Built-in (no toggle):** The plugin always uses **time-synced lyrics** from **LRCLIB** so the prompt updates with the current line. You can turn the **rotating style word** on or off in the config above.
 
-**Environment overrides (optional):** You can set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_FALLBACK_PROMPT`, `SPOTIFY_LYRICS_KEYWORDS_ONLY`, `SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS`, `SPOTIFY_LYRICS_PREVIEW_SECONDS` in the environment instead of or in addition to the UI.
+**Rotating style word (on/off):** When **on** (default), each lyric line (or each time interval) gets one of these words appended: *cinematic*, *dreamy*, *noir*, *vivid*, *surreal*, *ethereal*, *dramatic*, *moody*, *luminous*, *atmospheric*. That makes the image style vary so the same lyric doesn’t always look the same. **Style rotation interval** only applies when this is on: 0 = change the style word when the line changes; > 0 = change the style word every N seconds. When **off**, the prompt is just the lyric line (and song/artist from the template) with no style word — simpler, more literal visuals.
+
+**Environment overrides (optional):** You can set `SPOTIFY_TEMPLATE_THEME`, `SPOTIFY_FALLBACK_PROMPT`, `SPOTIFY_LYRICS_KEYWORDS_ONLY`, `SPOTIFY_LYRICS_ROTATING_STYLE`, `SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS`, `SPOTIFY_LYRICS_PREVIEW_SECONDS` in the environment instead of or in addition to the UI.
 
 ### Template theme presets (how each is constructed)
 
-Each preset builds the prompt from placeholders: `{song}` = track title, `{artist}` = artist name(s), `{lyrics}` = current time-synced lyric line (with rotating style word appended). Lyrics are always fetched and synced; if none are found for a track, `{lyrics}` is empty.
+Each preset builds the prompt from placeholders: `{song}` = track title, `{artist}` = artist name(s), `{lyrics}` = current time-synced lyric line (with rotating style word appended when that option is on). Lyrics are always fetched and synced; if none are found for a track, `{lyrics}` is empty.
 
 #### Comparison of prompt templates
 
@@ -217,20 +220,21 @@ Each preset builds the prompt from placeholders: `{song}` = track title, `{artis
 | **Dreamy / abstract** | Soft, dreamlike visuals driven by the current lyric line and song. | `{lyrics}, dreamlike, {song} by {artist}, soft lighting` — lyrics first, then song/artist, with “dreamlike” and “soft lighting” so the image model leans abstract and soft. |
 | **Lyrics + style** | Lyrics drive the scene; song and artist add a vivid, inspired-by style. | `{lyrics}, inspired by {song} and {artist}, vivid` — lyric content as the main subject, with song/artist as style context. |
 | **Music video still** | Single frame that could be from a music video for the track. | `Music video frame: {lyrics}, "{song}" by {artist}, cinematic` — frames the prompt as a music-video shot, cinematic look. |
-| **Minimal** | Only the current lyric line; no song/artist in the prompt. | `{lyrics}` — prompt is just the lyric text (with rotating style word). |
+| **Minimal** | Only the current lyric line; no song/artist in the prompt. | `{lyrics}` — prompt is just the lyric text (plus rotating style word when on). |
 | **Song + artist** | Template omits lyrics; good for simple, recognizable imagery. (Lyrics are still fetched; only the template doesn’t use `{lyrics}`.) | `{song} by {artist}, vivid, cinematic` — title and artist plus “vivid, cinematic”. |
 
 ### Lyrics (built-in)
 
-The plugin **always** uses **time-synced lyrics** from **LRCLIB** (free, no API key) and a **rotating style word** (cinematic, dreamy, noir, vivid, etc.) so the prompt updates with the current line and varies in style. Choose a **Template theme** that includes `{lyrics}` (e.g. Dreamy / abstract, Minimal) so the image follows the words; or use **Song + artist** for a shorter prompt. If synced lyrics aren’t found for a track, `{lyrics}` is empty and the prompt uses song/artist only.
+The plugin **always** uses **time-synced lyrics** from **LRCLIB** (free, no API key) so the prompt updates with the current line. When **Rotating style word** is on (default), a style word (cinematic, dreamy, noir, vivid, etc.) is appended so the look varies. Choose a **Template theme** that includes `{lyrics}` (e.g. Dreamy / abstract, Minimal) so the image follows the words; or use **Song + artist** for a shorter prompt. If synced lyrics aren’t found for a track, `{lyrics}` is empty and the prompt uses song/artist only.
 
-### Tuning: keywords, style rotation, preview
+### Tuning: keywords, rotating style, style rotation, preview
 
 - **Lyrics as keywords only** — Reduces each line to keyword-like words (strips common words). The prompt becomes more visual (e.g. “heart break run night”).
-- **Style rotation interval (sec)** — **0** = advance the style word when the lyric line changes; **> 0** (e.g. 3) = advance every N seconds so the prompt changes more often.
+- **Rotating style word** — **On**: append a rotating style word so the look varies. **Off**: no style word, just the lyric line (and song/artist from the template).
+- **Style rotation interval (sec)** — When Rotating style word is on: **0** = advance the style word when the lyric line changes; **> 0** (e.g. 3) = advance every N seconds so the prompt changes more often.
 - **Preview next line (sec)** — When **> 0** (e.g. 2), the *next* lyric line is shown that many seconds early so the image transitions sooner.
 
-Env vars (optional): `SPOTIFY_LYRICS_KEYWORDS_ONLY`, `SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS`, `SPOTIFY_LYRICS_PREVIEW_SECONDS`.
+Env vars (optional): `SPOTIFY_LYRICS_KEYWORDS_ONLY`, `SPOTIFY_LYRICS_ROTATING_STYLE`, `SPOTIFY_LYRICS_STYLE_ROTATION_SECONDS`, `SPOTIFY_LYRICS_PREVIEW_SECONDS`.
 
 ---
 
