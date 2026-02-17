@@ -107,12 +107,14 @@ class SpotifyPipeline(Pipeline):
         elif now - self._fps_last_log_time >= 5.0:
             elapsed = now - self._fps_last_log_time
             fps = self._fps_invocation_count / elapsed
-            logger.warning(
+            msg = (
                 "Spotify preprocessor: pipeline FPS ≈ %.1f (preprocessor invoked %d times in %.1fs). "
                 "Low FPS is from the image pipeline (Stream Diffusion steps/resolution), not this plugin. "
-                "Tune Scope/Stream Diffusion settings (e.g. fewer steps, lower resolution) for higher FPS.",
-                fps, self._fps_invocation_count, elapsed,
-            )
+                "Tune Scope/Stream Diffusion settings (e.g. fewer steps, lower resolution) for higher FPS."
+            ) % (fps, self._fps_invocation_count, elapsed)
+            logger.warning(msg)
+            # Print to stdout so RunPod (and any environment that only captures stdout) always shows FPS
+            print(msg, flush=True)
             self._fps_invocation_count = 0
             self._fps_last_log_time = now
 
